@@ -46,9 +46,15 @@ class EnhancedTableFormatter:
             'box': SIMPLE,
         },
         'oauth_clients': {
-            'columns': ['client_id', 'client_name', 'active_tokens', 'created_at', 'last_used'],
-            'headers': ['Client ID', 'Name', 'Active Tokens', 'Created', 'Last Used'],
-            'styles': ['mono', 'bold cyan', 'number', 'date', 'date'],
+            'columns': ['client_id', 'client_name', 'token_count', 'usage_count', 'last_used', 'created_at'],
+            'headers': ['Client ID', 'Name', 'Tokens', 'Uses', 'Last Used', 'Created'],
+            'styles': ['mono', 'bold cyan', 'number', 'number', 'date', 'date'],
+            'box': ROUNDED,
+        },
+        'oauth_tokens': {
+            'columns': ['jti', 'token_type', 'username', 'client_name', 'usage_count', 'last_used', 'time_remaining', 'issued_at'],
+            'headers': ['Token ID', 'Type', 'User', 'Client', 'Uses', 'Last Used', 'Expires', 'Issued'],
+            'styles': ['mono', 'dim', 'bold cyan', 'yellow', 'number', 'date', 'status', 'date'],
             'box': ROUNDED,
         },
         'logs': {
@@ -120,7 +126,9 @@ class EnhancedTableFormatter:
             return 'services'
         elif 'route_id' in sample or 'path_pattern' in sample:
             return 'routes'
-        elif 'client_id' in sample and 'client_secret' in sample:
+        elif 'jti' in sample and 'token_type' in sample:
+            return 'oauth_tokens'
+        elif 'client_id' in sample and ('client_secret' in sample or 'client_name' in sample):
             return 'oauth_clients'
         elif 'client_ip' in sample or 'request_path' in sample:
             return 'logs'
@@ -149,7 +157,8 @@ class EnhancedTableFormatter:
                 enhanced['method_path'] = f"{item.get('method', 'GET')} {item.get('path', '/')}"
                 enhanced['response_time'] = item.get('response_time_ms', 0)
             elif data_type == 'oauth_clients':
-                enhanced['active_tokens'] = len(item.get('tokens', []))
+                # token_count is already provided by the API
+                pass
             
             prepared.append(enhanced)
         
@@ -173,7 +182,12 @@ class EnhancedTableFormatter:
         
         for i, (col, header) in enumerate(zip(columns, headers)):
             style = styles[i] if i < len(styles) else None
-            table.add_column(header, style=style if style not in ['status', 'bool', 'date', 'number', 'status_code', 'mono'] else None)
+            # Special handling for client_id column to show full ID
+            if col == 'client_id':
+                table.add_column(header, style=style if style not in ['status', 'bool', 'date', 'number', 'status_code', 'mono'] else None, 
+                                no_wrap=True, min_width=29)
+            else:
+                table.add_column(header, style=style if style not in ['status', 'bool', 'date', 'number', 'status_code', 'mono'] else None)
         
         # Add rows
         for item in data:
@@ -181,13 +195,13 @@ class EnhancedTableFormatter:
             for i, col in enumerate(columns):
                 value = item.get(col, '')
                 style = styles[i] if i < len(styles) else None
-                formatted = self._format_cell(value, style)
+                formatted = self._format_cell(value, style, column_name=col)
                 row.append(formatted)
             table.add_row(*row)
         
         return table
     
-    def _format_cell(self, value: Any, style: Optional[str]) -> str:
+    def _format_cell(self, value: Any, style: Optional[str], column_name: Optional[str] = None) -> str:
         """Format individual cell based on style hint."""
         if value is None or value == '':
             return Text("—", style="dim")
@@ -204,7 +218,8 @@ class EnhancedTableFormatter:
         elif style == 'status_code':
             return self._format_status_code(value)
         elif style == 'mono':
-            return Text(str(value), style="bold mono")
+            # Don't truncate client_id values
+            return Text(str(value), style="bold mono", no_wrap=False)
         
         # Handle complex types
         if isinstance(value, list):
@@ -218,14 +233,36 @@ class EnhancedTableFormatter:
         
         # Default string formatting
         text = str(value)
-        if len(text) > 50:
+        # Don't truncate client_id values
+        if column_name != 'client_id' and len(text) > 50:
             text = text[:47] + "..."
         return text
     
     def _format_status(self, status: str) -> Text:
         """Format status with color coding."""
         status_lower = str(status).lower()
-        if 'active' in status_lower or 'running' in status_lower or 'ready' in status_lower:
+        
+        # Handle token expiration times
+        if 'expired' in status_lower:
+            return Text("expired", style="red")
+        elif status_lower.endswith('m'):  # Minutes remaining
+            try:
+                minutes = int(status_lower[:-1])
+                if minutes <= 5:
+                    return Text(status, style="bold red")
+                elif minutes <= 30:
+                    return Text(status, style="yellow")
+                else:
+                    return Text(status, style="green")
+            except:
+                pass
+        elif status_lower.endswith('h'):  # Hours remaining
+            return Text(status, style="green")
+        elif status_lower.endswith('d'):  # Days remaining
+            return Text(status, style="green")
+        
+        # Handle regular statuses
+        elif 'active' in status_lower or 'running' in status_lower or 'ready' in status_lower:
             return Text(f"● {status}", style="green")
         elif 'pending' in status_lower or 'starting' in status_lower:
             return Text(f"◌ {status}", style="yellow")
@@ -239,7 +276,7 @@ class EnhancedTableFormatter:
     def _format_date(self, value: Any) -> Text:
         """Format date/time values."""
         if not value:
-            return Text("—", style="dim")
+            return Text("never", style="dim")
         
         try:
             # Parse ISO format

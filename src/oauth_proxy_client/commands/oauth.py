@@ -22,18 +22,34 @@ def oauth_client():
 
 @oauth_client.command('list')
 @click.option('--active-only', is_flag=True, help='Show only active clients')
+@click.option('--page', type=int, default=1, help='Page number (default: 1)')
+@click.option('--per-page', type=int, default=50, help='Items per page (default: 50, max: 100)')
 @click.pass_obj
-def list_clients(ctx, active_only):
+def list_clients(ctx, active_only, page, per_page):
     """List OAuth clients."""
     try:
         client = ctx.ensure_client()
         
-        params = {}
+        params = {
+            'page': page,
+            'per_page': min(per_page, 100)  # Enforce API limit
+        }
         if active_only:
             params['active_only'] = 'true'
         
-        clients = client.get_sync('/api/v1/oauth/clients', params)
-        ctx.output(clients, title="OAuth Clients", data_type='oauth_clients')
+        response = client.get_sync('/api/v1/oauth/clients', params)
+        
+        # Extract clients array from response
+        clients = response.get('clients', []) if isinstance(response, dict) else response
+        
+        # Add summary info if available
+        if isinstance(response, dict) and 'summary' in response:
+            summary = response['summary']
+            title = f"OAuth Clients (Total: {summary.get('total_clients', 0)}, Active: {summary.get('active_clients', 0)})"
+        else:
+            title = "OAuth Clients"
+        
+        ctx.output(clients, title=title, data_type='oauth_clients')
     except Exception as e:
         ctx.handle_error(e)
 
@@ -268,22 +284,44 @@ def oauth_token():
 
 
 @oauth_token.command('list')
+@click.option('--token-type', help='Filter by token type (access/refresh)')
 @click.option('--client-id', help='Filter by client ID')
 @click.option('--username', help='Filter by username')
+@click.option('--include-expired', is_flag=True, help='Include expired tokens')
+@click.option('--page', type=int, default=1, help='Page number (default: 1)')
+@click.option('--per-page', type=int, default=50, help='Items per page (default: 50, max: 100)')
 @click.pass_obj
-def list_oauth_tokens(ctx, client_id, username):
-    """List all OAuth access tokens."""
+def list_oauth_tokens(ctx, token_type, client_id, username, include_expired, page, per_page):
+    """List all OAuth access and refresh tokens."""
     try:
         client = ctx.ensure_client()
         
-        params = {}
+        params = {
+            'page': page,
+            'per_page': min(per_page, 100)  # Enforce API limit
+        }
+        if token_type:
+            params['token_type'] = token_type
         if client_id:
             params['client_id'] = client_id
         if username:
             params['username'] = username
+        if include_expired:
+            params['include_expired'] = 'true'
         
-        tokens = client.get_sync('/api/v1/oauth/tokens', params)
-        ctx.output(tokens, title="OAuth Access Tokens", data_type='oauth_tokens')
+        response = client.get_sync('/api/v1/oauth/tokens', params)
+        
+        # Extract tokens array from response
+        tokens = response.get('tokens', []) if isinstance(response, dict) else response
+        
+        # Add summary info if available
+        if isinstance(response, dict) and 'summary' in response:
+            summary = response['summary']
+            title = f"OAuth Tokens (Total: {summary.get('total_tokens', 0)}, Active: {summary.get('active_tokens', 0)})"
+        else:
+            title = "OAuth Tokens"
+        
+        ctx.output(tokens, title=title, data_type='oauth_tokens')
     except Exception as e:
         ctx.handle_error(e)
 
