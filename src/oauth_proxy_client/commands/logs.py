@@ -212,7 +212,7 @@ def follow_logs(ctx, interval, hostname, status):
 @click.option('--limit', type=int, default=100, help='Maximum results')
 @click.pass_obj
 def logs_by_host(ctx, hostname, hours, limit):
-    """Query logs by hostname."""
+    """Query logs by client FQDN (reverse DNS of client IP)."""
     try:
         client = ctx.ensure_client()
         
@@ -222,7 +222,31 @@ def logs_by_host(ctx, hostname, hours, limit):
         }
         
         logs = client.get_sync(f'/api/v1/logs/host/{hostname}', params)
-        ctx.output(logs, title=f"Logs for hostname: {hostname}", data_type='logs')
+        ctx.output(logs, title=f"Logs from client FQDN: {hostname}", data_type='logs')
+    except Exception as e:
+        ctx.handle_error(e)
+
+
+@log_group.command('by-proxy')
+@click.argument('hostname')
+@click.option('--hours', type=int, default=24, help='Hours to look back')
+@click.option('--limit', type=int, default=100, help='Maximum results')
+@click.pass_obj
+def logs_by_proxy(ctx, hostname, hours, limit):
+    """Query logs by proxy hostname."""
+    try:
+        client = ctx.ensure_client()
+        
+        params = {
+            'hours': hours,
+            'limit': limit,
+        }
+        
+        # Note: This uses search endpoint with hostname filter
+        # since there's no dedicated proxy hostname endpoint
+        params['hostname'] = hostname
+        logs = client.get_sync('/api/v1/logs/search', params)
+        ctx.output(logs, title=f"Logs for proxy hostname: {hostname}", data_type='logs')
     except Exception as e:
         ctx.handle_error(e)
 

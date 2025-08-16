@@ -179,6 +179,8 @@ proxy-client route list-by-scope [global|proxy]
 proxy-client log search [--query "status:500"] [--hours 24]
 proxy-client log errors [--hours 1]
 proxy-client log by-ip <ip> [--hours 24]
+proxy-client log by-host <fqdn> [--hours 24]  # Query by client FQDN (reverse DNS)
+proxy-client log by-proxy <hostname> [--hours 24]  # Query by proxy hostname
 proxy-client log stats [--hours 24]
 ```
 
