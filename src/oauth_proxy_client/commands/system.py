@@ -449,7 +449,7 @@ def import_config(ctx, config_file, force, dry_run, skip_existing):
                             # Check if exists
                             if skip_existing:
                                 try:
-                                    existing = client.get_sync(f"/api/v1/tokens/{token_data['name']}")
+                                    existing = client.get_sync(f"/tokens/{token_data['name']}")
                                     if existing:
                                         stats['skipped'] += 1
                                         continue

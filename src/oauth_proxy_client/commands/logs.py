@@ -149,7 +149,7 @@ def follow_logs(ctx, interval, hostname, status):
         try:
             while True:
                 params = {
-                    'hours': 0.1,  # Last 6 minutes
+                    'hours': 1,  # Last 1 hour
                     'limit': 20,
                 }
                 
@@ -504,7 +504,7 @@ def test_logging(ctx):
             console.print(f"  Generated {result.get('entries_created', 0)} test entries")
             
             # Try to retrieve the test entries
-            params = {'hours': 0.1, 'limit': 5}
+            params = {'hours': 1, 'limit': 5}
             recent_logs = client.get_sync('/logs/search', params)
             
             if recent_logs:
