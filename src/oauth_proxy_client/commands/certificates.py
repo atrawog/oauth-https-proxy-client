@@ -24,11 +24,11 @@ def list_certificates(ctx, token):
     """List all certificates."""
     try:
         client = ctx.ensure_client()
-        certs = client.get_sync('/api/v1/certificates/')
+        certs = client.get_sync('/certificates/')
         
         # Filter by token if specified
         if token:
-            token_info = client.get_sync(f'/api/v1/tokens/{token}')
+            token_info = client.get_sync(f'/tokens/{token}')
             token_hash = token_info.get('hash')
             certs = [c for c in certs if c.get('owner_token_hash') == token_hash]
         
@@ -64,7 +64,7 @@ def create_certificate(ctx, name, domain, email, staging, wait):
         if staging:
             data['acme_directory_url'] = ctx.config.acme_staging_url
         
-        result = client.post_sync('/api/v1/certificates/', data)
+        result = client.post_sync('/certificates/', data)
         
         console.print(f"[green]Certificate generation started for {domain}![/green]")
         
@@ -112,7 +112,7 @@ def create_multi_domain(ctx, name, domains, email, staging, wait):
         if staging:
             data['acme_directory_url'] = ctx.config.acme_staging_url
         
-        result = client.post_sync('/api/v1/certificates/multi-domain', data)
+        result = client.post_sync('/certificates/multi-domain', data)
         
         console.print(f"[green]Multi-domain certificate generation started![/green]")
         console.print(f"Domains: {', '.join(domain_list)}")
@@ -134,7 +134,7 @@ def show_certificate(ctx, name, pem):
     """Show certificate details."""
     try:
         client = ctx.ensure_client()
-        cert = client.get_sync(f'/api/v1/certificates/{name}')
+        cert = client.get_sync(f'/certificates/{name}')
         
         if pem:
             # Show raw PEM content
@@ -167,7 +167,7 @@ def certificate_status(ctx, name, wait):
         if wait:
             _wait_for_certificate(client, name, ctx)
         else:
-            status = client.get_sync(f'/api/v1/certificates/{name}/status')
+            status = client.get_sync(f'/certificates/{name}/status')
             ctx.output(status, title=f"Certificate Status: {name}")
     except Exception as e:
         ctx.handle_error(e)
@@ -187,7 +187,7 @@ def renew_certificate(ctx, name, force, wait):
         if force:
             data['force'] = True
         
-        result = client.post_sync(f'/api/v1/certificates/{name}/renew', data)
+        result = client.post_sync(f'/certificates/{name}/renew', data)
         
         console.print(f"[green]Certificate renewal started for {name}![/green]")
         
@@ -210,7 +210,7 @@ def convert_to_production(ctx, name, wait, force):
         client = ctx.ensure_client()
         
         # Get certificate details to confirm it's staging
-        cert = client.get_sync(f'/api/v1/certificates/{name}')
+        cert = client.get_sync(f'/certificates/{name}')
         if not cert:
             console.print(f"[red]Certificate '{name}' not found[/red]")
             return
@@ -227,7 +227,7 @@ def convert_to_production(ctx, name, wait, force):
                 return
         
         # Trigger conversion
-        result = client.post_sync(f'/api/v1/certificates/{name}/convert-to-production')
+        result = client.post_sync(f'/certificates/{name}/convert-to-production')
         
         console.print(f"[green]Certificate conversion to production started for {name}![/green]")
         
@@ -252,7 +252,7 @@ def delete_certificate(ctx, name, force):
                 return
         
         client = ctx.ensure_client()
-        client.delete_sync(f'/api/v1/certificates/{name}')
+        client.delete_sync(f'/certificates/{name}')
         
         console.print(f"[green]Certificate '{name}' deleted successfully![/green]")
     except Exception as e:
@@ -268,7 +268,7 @@ def export_certificate(ctx, name, output_dir, separate):
     """Export certificate to files."""
     try:
         client = ctx.ensure_client()
-        cert = client.get_sync(f'/api/v1/certificates/{name}')
+        cert = client.get_sync(f'/certificates/{name}')
         
         # Create output directory
         output_dir = Path(output_dir)
@@ -312,7 +312,7 @@ def convert_to_production(ctx, name, force):
         client = ctx.ensure_client()
         
         # Get current certificate
-        cert = client.get_sync(f'/api/v1/certificates/{name}')
+        cert = client.get_sync(f'/certificates/{name}')
         
         # Check if already production
         if 'staging' not in cert.get('acme_directory_url', '').lower():
@@ -320,7 +320,7 @@ def convert_to_production(ctx, name, force):
             return
         
         # Delete staging cert
-        client.delete_sync(f'/api/v1/certificates/{name}')
+        client.delete_sync(f'/certificates/{name}')
         
         # Create production cert with same details
         data = {
@@ -332,9 +332,9 @@ def convert_to_production(ctx, name, force):
         
         if len(cert['domains']) == 1:
             data['domain'] = cert['domains'][0]
-            result = client.post_sync('/api/v1/certificates/', data)
+            result = client.post_sync('/certificates/', data)
         else:
-            result = client.post_sync('/api/v1/certificates/multi-domain', data)
+            result = client.post_sync('/certificates/multi-domain', data)
         
         console.print(f"[green]Production certificate generation started![/green]")
         _wait_for_certificate(client, name, ctx)
@@ -354,7 +354,7 @@ def _wait_for_certificate(client, name, ctx):
         max_attempts = 60
         for attempt in range(max_attempts):
             try:
-                status = client.get_sync(f'/api/v1/certificates/{name}/status')
+                status = client.get_sync(f'/certificates/{name}/status')
                 
                 current_status = status.get('status', 'unknown')
                 
@@ -366,7 +366,7 @@ def _wait_for_certificate(client, name, ctx):
                     console.print(f"[green]Certificate '{name}' generated successfully![/green]")
                     
                     # Show certificate details
-                    cert = client.get_sync(f'/api/v1/certificates/{name}')
+                    cert = client.get_sync(f'/certificates/{name}')
                     display_cert = {
                         'name': cert['cert_name'],
                         'domains': cert['domains'],

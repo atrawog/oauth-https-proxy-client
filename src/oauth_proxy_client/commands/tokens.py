@@ -21,7 +21,7 @@ def list_tokens(ctx):
     """List all tokens."""
     try:
         client = ctx.ensure_client()
-        tokens = client.get_sync('/api/v1/tokens/')
+        tokens = client.get_sync('/tokens/')
         
         # Remove sensitive data from display
         for token in tokens:
@@ -46,7 +46,7 @@ def create_token(ctx, name, cert_email):
         if cert_email:
             data['cert_email'] = cert_email
         
-        result = client.post_sync('/api/v1/tokens/', data)
+        result = client.post_sync('/tokens/', data)
         
         # Show full token on creation
         console.print(f"[green]Token created successfully![/green]")
@@ -73,7 +73,7 @@ def generate_token(ctx, name, cert_email):
         if cert_email:
             data['cert_email'] = cert_email
         
-        result = client.post_sync('/api/v1/tokens/generate', data)
+        result = client.post_sync('/tokens/generate', data)
         
         # Output in requested format
         if ctx.output_format == 'json':
@@ -97,7 +97,7 @@ def show_token(ctx, name):
     """Show token details."""
     try:
         client = ctx.ensure_client()
-        token = client.get_sync(f'/api/v1/tokens/{name}')
+        token = client.get_sync(f'/tokens/{name}')
         
         # Mask token value in details
         if 'token' in token:
@@ -120,7 +120,7 @@ def reveal_token(ctx, name, confirm):
                 return
         
         client = ctx.ensure_client()
-        result = client.get_sync(f'/api/v1/tokens/{name}/reveal')
+        result = client.get_sync(f'/tokens/{name}/reveal')
         
         if ctx.output_format == 'json':
             ctx.output(result)
@@ -138,7 +138,7 @@ def token_info(ctx):
     """Get current token information."""
     try:
         client = ctx.ensure_client()
-        info = client.get_sync('/api/v1/tokens/info')
+        info = client.get_sync('/tokens/info')
         ctx.output(info, title="Current Token Info")
     except Exception as e:
         ctx.handle_error(e)
@@ -151,7 +151,7 @@ def update_token_email(ctx, email):
     """Update certificate email for current token."""
     try:
         client = ctx.ensure_client()
-        result = client.put_sync('/api/v1/tokens/email', {'email': email})
+        result = client.put_sync('/tokens/email', {'email': email})
         
         console.print(f"[green]Email updated successfully![/green]")
         ctx.output(result)
@@ -171,7 +171,7 @@ def delete_token(ctx, name, force):
                 return
         
         client = ctx.ensure_client()
-        client.delete_sync(f'/api/v1/tokens/{name}')
+        client.delete_sync(f'/tokens/{name}')
         
         console.print(f"[green]Token '{name}' deleted successfully![/green]")
     except Exception as e:
@@ -188,16 +188,16 @@ def show_token_certs(ctx, name):
         
         # Get token details
         if name:
-            token = client.get_sync(f'/api/v1/tokens/{name}')
+            token = client.get_sync(f'/tokens/{name}')
             token_hash = token.get('hash')
         else:
             # Use current token
-            info = client.get_sync('/api/v1/tokens/info')
+            info = client.get_sync('/tokens/info')
             token_hash = info.get('hash')
             name = info.get('name', 'current')
         
         # Get all certificates and filter by owner
-        certs = client.get_sync('/api/v1/certificates/')
+        certs = client.get_sync('/certificates/')
         owned_certs = [c for c in certs if c.get('owner_token_hash') == token_hash]
         
         if owned_certs:
@@ -214,7 +214,7 @@ def list_tokens_formatted(ctx):
     """List all tokens in formatted display."""
     try:
         client = ctx.ensure_client()
-        formatted = client.get_sync('/api/v1/tokens/formatted')
+        formatted = client.get_sync('/tokens/formatted')
         
         # Formatted endpoint returns text, not JSON
         console.print(formatted)
@@ -229,7 +229,7 @@ def token_certificates(ctx, name):
     """List certificates owned by a token."""
     try:
         client = ctx.ensure_client()
-        certs = client.get_sync(f'/api/v1/tokens/{name}/certificates')
+        certs = client.get_sync(f'/tokens/{name}/certificates')
         
         if certs:
             ctx.output(certs, title=f"Certificates owned by token: {name}")
@@ -246,7 +246,7 @@ def token_proxies(ctx, name):
     """List proxies owned by a token."""
     try:
         client = ctx.ensure_client()
-        proxies = client.get_sync(f'/api/v1/tokens/{name}/proxies')
+        proxies = client.get_sync(f'/tokens/{name}/proxies')
         
         if proxies:
             ctx.output(proxies, title=f"Proxies owned by token: {name}")
@@ -269,7 +269,7 @@ def create_admin_token(ctx, name, cert_email):
         if cert_email:
             data['cert_email'] = cert_email
         
-        result = client.post_sync('/api/v1/tokens/admin', data)
+        result = client.post_sync('/tokens/admin', data)
         
         console.print(f"[green]Admin token created successfully![/green]")
         console.print(f"Name: {result['name']}")

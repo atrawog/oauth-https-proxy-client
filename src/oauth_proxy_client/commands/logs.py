@@ -41,7 +41,7 @@ def search_logs(ctx, query, hours, hostname, status, limit):
         if status:
             params['status'] = status
         
-        logs = client.get_sync('/api/v1/logs/search', params)
+        logs = client.get_sync('/logs/search', params)
         ctx.output(logs, title="Log Search Results", data_type='logs')
     except Exception as e:
         ctx.handle_error(e)
@@ -62,7 +62,7 @@ def logs_by_ip(ctx, ip, hours, limit):
             'limit': limit,
         }
         
-        logs = client.get_sync(f'/api/v1/logs/ip/{ip}', params)
+        logs = client.get_sync(f'/logs/ip/{ip}', params)
         ctx.output(logs, title=f"Logs from IP: {ip}", data_type='logs')
     except Exception as e:
         ctx.handle_error(e)
@@ -83,7 +83,7 @@ def logs_by_client(ctx, client_id, hours, limit):
             'limit': limit,
         }
         
-        logs = client.get_sync(f'/api/v1/logs/client/{client_id}', params)
+        logs = client.get_sync(f'/logs/client/{client_id}', params)
         ctx.output(logs, title=f"Logs from Client: {client_id}", data_type='logs')
     except Exception as e:
         ctx.handle_error(e)
@@ -105,7 +105,7 @@ def show_errors(ctx, hours, include_warnings, limit):
             'limit': limit,
         }
         
-        errors = client.get_sync('/api/v1/logs/errors', params)
+        errors = client.get_sync('/logs/errors', params)
         ctx.output(errors, title="Recent Errors", data_type='logs')
     except Exception as e:
         ctx.handle_error(e)
@@ -120,7 +120,7 @@ def event_stats(ctx, hours):
         client = ctx.ensure_client()
         
         params = {'hours': hours}
-        stats = client.get_sync('/api/v1/logs/events', params)
+        stats = client.get_sync('/logs/events', params)
         ctx.output(stats, title="Event Statistics")
     except Exception as e:
         ctx.handle_error(e)
@@ -158,7 +158,7 @@ def follow_logs(ctx, interval, hostname, status):
                 if status:
                     params['status'] = status
                 
-                logs = client.get_sync('/api/v1/logs/search', params)
+                logs = client.get_sync('/logs/search', params)
                 
                 # Filter to only new logs
                 if last_timestamp and logs:
@@ -221,7 +221,7 @@ def logs_by_host(ctx, hostname, hours, limit):
             'limit': limit,
         }
         
-        logs = client.get_sync(f'/api/v1/logs/host/{hostname}', params)
+        logs = client.get_sync(f'/logs/host/{hostname}', params)
         ctx.output(logs, title=f"Logs from client FQDN: {hostname}", data_type='logs')
     except Exception as e:
         ctx.handle_error(e)
@@ -245,7 +245,7 @@ def logs_by_proxy(ctx, hostname, hours, limit):
         # Note: This uses search endpoint with hostname filter
         # since there's no dedicated proxy hostname endpoint
         params['hostname'] = hostname
-        logs = client.get_sync('/api/v1/logs/search', params)
+        logs = client.get_sync('/logs/search', params)
         ctx.output(logs, title=f"Logs for proxy hostname: {hostname}", data_type='logs')
     except Exception as e:
         ctx.handle_error(e)
@@ -260,7 +260,7 @@ def log_stats(ctx, hours):
         client = ctx.ensure_client()
         
         params = {'hours': hours}
-        stats = client.get_sync('/api/v1/logs/stats', params)
+        stats = client.get_sync('/logs/stats', params)
         
         # Display statistics in a formatted way
         if ctx.output_format == 'table' or ctx.output_format == 'auto':
@@ -322,7 +322,7 @@ def oauth_activity(ctx, ip, hours, limit):
             'limit': limit,
         }
         
-        activity = client.get_sync(f'/api/v1/logs/oauth/{ip}', params)
+        activity = client.get_sync(f'/logs/oauth/{ip}', params)
         
         # Display OAuth activity summary
         if ctx.output_format == 'table' or ctx.output_format == 'auto':
@@ -373,7 +373,7 @@ def oauth_debug(ctx, ip, hours, limit):
             'limit': limit,
         }
         
-        debug_info = client.get_sync(f'/api/v1/logs/oauth-debug/{ip}', params)
+        debug_info = client.get_sync(f'/logs/oauth-debug/{ip}', params)
         
         # Display detailed OAuth debugging information
         if ctx.output_format == 'table' or ctx.output_format == 'auto':
@@ -460,7 +460,7 @@ def oauth_flow(ctx, client_id, username, hours):
         if username:
             params['username'] = username
         
-        flows = client.get_sync('/api/v1/logs/oauth-flow', params)
+        flows = client.get_sync('/logs/oauth-flow', params)
         ctx.output(flows, title="OAuth Flows")
     except Exception as e:
         ctx.handle_error(e)
@@ -478,7 +478,7 @@ def clear_logs(ctx, force):
                 return
         
         client = ctx.ensure_client()
-        result = client.delete_sync('/api/v1/logs')
+        result = client.delete_sync('/logs')
         
         console.print("[green]✓ All logs cleared successfully![/green]")
         if result and 'deleted_count' in result:
@@ -497,7 +497,7 @@ def test_logging(ctx):
         console.print("[yellow]Testing logging system...[/yellow]")
         
         # Generate test log entries
-        result = client.post_sync('/api/v1/logs/test')
+        result = client.post_sync('/logs/test')
         
         if result.get('success'):
             console.print("[green]✓ Logging system test successful![/green]")
@@ -505,7 +505,7 @@ def test_logging(ctx):
             
             # Try to retrieve the test entries
             params = {'hours': 0.1, 'limit': 5}
-            recent_logs = client.get_sync('/api/v1/logs/search', params)
+            recent_logs = client.get_sync('/logs/search', params)
             
             if recent_logs:
                 console.print(f"  Retrieved {len(recent_logs)} recent log entries")

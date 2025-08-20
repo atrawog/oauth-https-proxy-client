@@ -44,6 +44,16 @@ token: acm_your_token_here
 format: table
 ```
 
+### Authentication Requirements
+
+The client uses the flexible authentication system:
+- **Public endpoints**: No token required (e.g., health check)
+- **Bearer endpoints**: Requires any valid `acm_*` token
+- **Admin endpoints**: Requires `ADMIN_TOKEN` (e.g., auth configuration, token management)
+- **OAuth endpoints**: Requires OAuth token with appropriate scopes
+
+Most commands require at least bearer authentication. Admin operations require the admin token.
+
 ## Enhanced Display Examples
 
 ### Token List Display
@@ -126,6 +136,26 @@ proxy-client [OPTIONS] COMMAND [ARGS]...
 - `--help` - Show help message
 
 ## Available Commands
+
+### Authentication Management
+```bash
+# Configure endpoint authentication
+proxy-client auth endpoint list
+proxy-client auth endpoint create <pattern> <auth-type> [--methods GET,POST] [--priority 80]
+proxy-client auth endpoint update <config-id> [--auth-type bearer]
+proxy-client auth endpoint delete <config-id>
+proxy-client auth endpoint test <path> <method>
+
+# Configure route authentication
+proxy-client auth route set <route-id> <auth-type> [--override-proxy]
+proxy-client auth route get <route-id>
+proxy-client auth route clear <route-id>
+
+# Configure proxy authentication  
+proxy-client auth proxy set <hostname> <auth-type> [--auth-proxy auth.domain.com]
+proxy-client auth proxy get <hostname>
+proxy-client auth proxy clear <hostname>
+```
 
 ### Token Management
 ```bash

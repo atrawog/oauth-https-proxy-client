@@ -37,7 +37,7 @@ def list_clients(ctx, active_only, page, per_page):
         if active_only:
             params['active_only'] = 'true'
         
-        response = client.get_sync('/api/v1/oauth/clients', params)
+        response = client.get_sync('/oauth/clients', params)
         
         # Extract clients array from response
         clients = response.get('clients', []) if isinstance(response, dict) else response
@@ -61,7 +61,7 @@ def show_client(ctx, client_id):
     """Show OAuth client details."""
     try:
         client = ctx.ensure_client()
-        oauth_client = client.get_sync(f'/api/v1/oauth/clients/{client_id}')
+        oauth_client = client.get_sync(f'/oauth/clients/{client_id}')
         ctx.output(oauth_client, title=f"OAuth Client: {client_id}")
     except Exception as e:
         ctx.handle_error(e)
@@ -80,7 +80,7 @@ def list_sessions(ctx):
     """List active OAuth sessions."""
     try:
         client = ctx.ensure_client()
-        sessions = client.get_sync('/api/v1/oauth/sessions')
+        sessions = client.get_sync('/oauth/sessions')
         ctx.output(sessions, title="Active OAuth Sessions", data_type='oauth_sessions')
     except Exception as e:
         ctx.handle_error(e)
@@ -98,7 +98,7 @@ def revoke_session(ctx, session_id, force):
                 return
         
         client = ctx.ensure_client()
-        client.delete_sync(f'/api/v1/oauth/sessions/{session_id}')
+        client.delete_sync(f'/oauth/sessions/{session_id}')
         
         console.print(f"[green]Session '{session_id}' revoked successfully![/green]")
     except Exception as e:
@@ -112,7 +112,7 @@ def oauth_metrics(ctx):
     """Show OAuth system metrics."""
     try:
         client = ctx.ensure_client()
-        metrics = client.get_sync('/api/v1/oauth/metrics')
+        metrics = client.get_sync('/oauth/metrics')
         ctx.output(metrics, title="OAuth Metrics")
     except Exception as e:
         ctx.handle_error(e)
@@ -124,7 +124,7 @@ def oauth_health(ctx):
     """Check OAuth integration health."""
     try:
         client = ctx.ensure_client()
-        health = client.get_sync('/api/v1/oauth/health')
+        health = client.get_sync('/oauth/health')
         
         if ctx.output_format == 'json':
             ctx.output(health)
@@ -200,7 +200,7 @@ def admin_setup_status(ctx):
     """Check OAuth setup status."""
     try:
         client = ctx.ensure_client()
-        status = client.get_sync('/api/v1/oauth/admin/setup-status')
+        status = client.get_sync('/oauth/admin/setup-status')
         
         if ctx.output_format == 'json':
             ctx.output(status)
@@ -236,7 +236,7 @@ def admin_setup_routes(ctx, domain):
     try:
         client = ctx.ensure_client()
         data = {'domain': domain}
-        result = client.post_sync('/api/v1/oauth/admin/setup-routes', data)
+        result = client.post_sync('/oauth/admin/setup-routes', data)
         
         console.print(f"[green]OAuth routes configured for domain: {domain}![/green]")
         ctx.output(result)
@@ -257,7 +257,7 @@ def list_oauth_proxies(ctx):
     """List OAuth-enabled proxies."""
     try:
         client = ctx.ensure_client()
-        proxies = client.get_sync('/api/v1/oauth/proxies')
+        proxies = client.get_sync('/oauth/proxies')
         ctx.output(proxies, title="OAuth-Enabled Proxies")
     except Exception as e:
         ctx.handle_error(e)
@@ -270,7 +270,7 @@ def proxy_sessions(ctx, hostname):
     """Get sessions for a specific proxy."""
     try:
         client = ctx.ensure_client()
-        sessions = client.get_sync(f'/api/v1/oauth/proxies/{hostname}/sessions')
+        sessions = client.get_sync(f'/oauth/proxies/{hostname}/sessions')
         ctx.output(sessions, title=f"Sessions for proxy: {hostname}")
     except Exception as e:
         ctx.handle_error(e)
@@ -309,7 +309,7 @@ def list_oauth_tokens(ctx, token_type, client_id, username, include_expired, pag
         if include_expired:
             params['include_expired'] = 'true'
         
-        response = client.get_sync('/api/v1/oauth/tokens', params)
+        response = client.get_sync('/oauth/tokens', params)
         
         # Extract tokens array from response
         tokens = response.get('tokens', []) if isinstance(response, dict) else response
@@ -333,7 +333,7 @@ def show_oauth_token(ctx, jti):
     """Show OAuth token details."""
     try:
         client = ctx.ensure_client()
-        token = client.get_sync(f'/api/v1/oauth/tokens/{jti}')
+        token = client.get_sync(f'/oauth/tokens/{jti}')
         ctx.output(token, title=f"OAuth Token: {jti}")
     except Exception as e:
         ctx.handle_error(e)
@@ -347,7 +347,7 @@ def list_client_tokens(ctx, client_id):
     """List tokens for a specific OAuth client."""
     try:
         client = ctx.ensure_client()
-        tokens = client.get_sync(f'/api/v1/oauth/clients/{client_id}/tokens')
+        tokens = client.get_sync(f'/oauth/clients/{client_id}/tokens')
         ctx.output(tokens, title=f"Tokens for client: {client_id}", data_type='oauth_tokens')
     except Exception as e:
         ctx.handle_error(e)
@@ -361,7 +361,7 @@ def show_session(ctx, session_id):
     """Show OAuth session details."""
     try:
         client = ctx.ensure_client()
-        session = client.get_sync(f'/api/v1/oauth/sessions/{session_id}')
+        session = client.get_sync(f'/oauth/sessions/{session_id}')
         ctx.output(session, title=f"OAuth Session: {session_id}")
     except Exception as e:
         ctx.handle_error(e)

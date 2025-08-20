@@ -18,7 +18,7 @@ def list_resources(ctx):
     """List all protected resources."""
     try:
         client = ctx.ensure_client()
-        resources = client.get_sync('/api/v1/resources/')
+        resources = client.get_sync('/resources/')
         ctx.output(resources, title="Protected Resources")
     except Exception as e:
         ctx.handle_error(e)
@@ -42,7 +42,7 @@ def register_resource(ctx, uri, proxy_hostname, name, scopes):
             'scopes': scopes.split(','),
         }
         
-        result = client.post_sync('/api/v1/resources/', data)
+        result = client.post_sync('/resources/', data)
         
         console.print(f"[green]Protected resource registered successfully![/green]")
         ctx.output(result)
@@ -62,7 +62,7 @@ def show_resource(ctx, uri):
         from urllib.parse import quote
         encoded_uri = quote(uri, safe='')
         
-        resource = client.get_sync(f'/api/v1/resources/{encoded_uri}')
+        resource = client.get_sync(f'/resources/{encoded_uri}')
         ctx.output(resource, title=f"Protected Resource: {uri}")
     except Exception as e:
         ctx.handle_error(e)
@@ -81,7 +81,7 @@ def validate_token(ctx, uri, token):
         encoded_uri = quote(uri, safe='')
         
         data = {'token': token}
-        result = client.post_sync(f'/api/v1/resources/{encoded_uri}/validate-token', data)
+        result = client.post_sync(f'/resources/{encoded_uri}/validate-token', data)
         
         if result.get('valid'):
             console.print(f"[green]✓ Token is valid for resource: {uri}[/green]")
@@ -99,7 +99,7 @@ def auto_register_resources(ctx):
     """Auto-discover and register protected resources from proxy configurations."""
     try:
         client = ctx.ensure_client()
-        result = client.post_sync('/api/v1/resources/auto-register')
+        result = client.post_sync('/resources/auto-register')
         
         console.print(f"[green]Auto-registration complete![/green]")
         ctx.output(result)
@@ -123,7 +123,7 @@ def update_resource(ctx, uri, name, proxy_target, scopes, metadata_url):
         encoded_uri = quote(uri, safe='')
         
         # Get current configuration
-        current = client.get_sync(f'/api/v1/resources/{encoded_uri}')
+        current = client.get_sync(f'/resources/{encoded_uri}')
         
         # Build update data
         data = dict(current)
@@ -137,7 +137,7 @@ def update_resource(ctx, uri, name, proxy_target, scopes, metadata_url):
         if metadata_url:
             data['metadata_url'] = metadata_url
         
-        result = client.put_sync(f'/api/v1/resources/{encoded_uri}', data)
+        result = client.put_sync(f'/resources/{encoded_uri}', data)
         
         console.print(f"[green]Protected resource '{uri}' updated successfully![/green]")
         ctx.output(result)
@@ -163,7 +163,7 @@ def delete_resource(ctx, uri, force):
         from urllib.parse import quote
         encoded_uri = quote(uri, safe='')
         
-        client.delete_sync(f'/api/v1/resources/{encoded_uri}')
+        client.delete_sync(f'/resources/{encoded_uri}')
         
         console.print(f"[green]Protected resource '{uri}' deleted successfully![/green]")
     except Exception as e:

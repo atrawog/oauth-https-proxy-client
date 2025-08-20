@@ -74,7 +74,7 @@ def system_info(ctx):
         # Get current token info if authenticated
         if ctx.config.token:
             try:
-                token_info = client.get_sync('/api/v1/tokens/info')
+                token_info = client.get_sync('/tokens/info')
                 info['current_token'] = {
                     'name': token_info.get('name'),
                     'cert_email': token_info.get('cert_email'),
@@ -98,37 +98,37 @@ def system_stats(ctx):
         
         # Get counts from various endpoints
         try:
-            tokens = client.get_sync('/api/v1/tokens/')
+            tokens = client.get_sync('/tokens/')
             stats['tokens'] = len(tokens)
         except Exception:
             stats['tokens'] = 'N/A'
         
         try:
-            certs = client.get_sync('/api/v1/certificates/')
+            certs = client.get_sync('/certificates/')
             stats['certificates'] = len(certs)
         except Exception:
             stats['certificates'] = 'N/A'
         
         try:
-            proxies = client.get_sync('/api/v1/proxy/targets/')
+            proxies = client.get_sync('/proxy/targets/')
             stats['proxies'] = len(proxies)
         except Exception:
             stats['proxies'] = 'N/A'
         
         try:
-            routes = client.get_sync('/api/v1/routes/')
+            routes = client.get_sync('/routes/')
             stats['routes'] = len(routes)
         except Exception:
             stats['routes'] = 'N/A'
         
         try:
-            services = client.get_sync('/api/v1/services/')
+            services = client.get_sync('/services/')
             stats['docker_services'] = len(services)
         except Exception:
             stats['docker_services'] = 'N/A'
         
         try:
-            resources = client.get_sync('/api/v1/resources/')
+            resources = client.get_sync('/resources/')
             stats['mcp_resources'] = len(resources)
         except Exception:
             stats['mcp_resources'] = 'N/A'
@@ -181,7 +181,7 @@ def validate_config(ctx):
         # Test authentication
         if ctx.config.token:
             try:
-                token_info = client.get_sync('/api/v1/tokens/info')
+                token_info = client.get_sync('/tokens/info')
                 console.print(f"[green]✓ Authenticated as: {token_info.get('name', 'unknown')}[/green]")
             except Exception as e:
                 console.print(f"[red]✗ Authentication failed: {e}[/red]")
@@ -275,7 +275,7 @@ def export_config(ctx, output, include_tokens, include_secrets):
             if include_tokens:
                 task = progress.add_task("Exporting tokens...", total=None)
                 try:
-                    tokens = client.get_sync('/api/v1/tokens/')
+                    tokens = client.get_sync('/tokens/')
                     for token in tokens:
                         token_data = {
                             'name': token.get('name'),
@@ -284,7 +284,7 @@ def export_config(ctx, output, include_tokens, include_secrets):
                         if include_secrets:
                             # Try to reveal the actual token
                             try:
-                                revealed = client.get_sync(f'/api/v1/tokens/{token["name"]}/reveal')
+                                revealed = client.get_sync(f'/tokens/{token["name"]}/reveal')
                                 token_data['token'] = revealed.get('token')
                             except Exception:
                                 pass
@@ -296,7 +296,7 @@ def export_config(ctx, output, include_tokens, include_secrets):
             # Export certificates
             task = progress.add_task("Exporting certificates...", total=None)
             try:
-                certs = client.get_sync('/api/v1/certificates/')
+                certs = client.get_sync('/certificates/')
                 for cert in certs:
                     cert_data = {
                         'cert_name': cert.get('cert_name'),
@@ -316,7 +316,7 @@ def export_config(ctx, output, include_tokens, include_secrets):
             # Export Docker services
             task = progress.add_task("Exporting Docker services...", total=None)
             try:
-                services = client.get_sync('/api/v1/services/')
+                services = client.get_sync('/services/')
                 config['services']['docker'] = services
                 progress.update(task, description=f"Exported {len(services)} Docker services")
             except Exception as e:
@@ -325,7 +325,7 @@ def export_config(ctx, output, include_tokens, include_secrets):
             # Export external services
             task = progress.add_task("Exporting external services...", total=None)
             try:
-                external = client.get_sync('/api/v1/services/external')
+                external = client.get_sync('/services/external')
                 config['services']['external'] = external
                 progress.update(task, description=f"Exported {len(external)} external services")
             except Exception as e:
@@ -334,18 +334,18 @@ def export_config(ctx, output, include_tokens, include_secrets):
             # Export proxies
             task = progress.add_task("Exporting proxies...", total=None)
             try:
-                proxies = client.get_sync('/api/v1/proxy/targets/')
+                proxies = client.get_sync('/proxy/targets/')
                 for proxy in proxies:
                     # Get auth config if exists
                     try:
-                        auth_config = client.get_sync(f'/api/v1/proxy/targets/{proxy["hostname"]}/auth')
+                        auth_config = client.get_sync(f'/proxy/targets/{proxy["hostname"]}/auth')
                         proxy['auth'] = auth_config
                     except Exception:
                         pass
                     
                     # Get MCP config if exists
                     try:
-                        mcp_config = client.get_sync(f'/api/v1/proxy/targets/{proxy["hostname"]}/mcp')
+                        mcp_config = client.get_sync(f'/proxy/targets/{proxy["hostname"]}/mcp')
                         proxy['mcp'] = mcp_config
                     except Exception:
                         pass
@@ -358,7 +358,7 @@ def export_config(ctx, output, include_tokens, include_secrets):
             # Export routes
             task = progress.add_task("Exporting routes...", total=None)
             try:
-                routes = client.get_sync('/api/v1/routes/')
+                routes = client.get_sync('/routes/')
                 config['routes'] = routes
                 progress.update(task, description=f"Exported {len(routes)} routes")
             except Exception as e:
@@ -367,7 +367,7 @@ def export_config(ctx, output, include_tokens, include_secrets):
             # Export resources
             task = progress.add_task("Exporting protected resources...", total=None)
             try:
-                resources = client.get_sync('/api/v1/resources/')
+                resources = client.get_sync('/resources/')
                 config['resources'] = resources
                 progress.update(task, description=f"Exported {len(resources)} resources")
             except Exception as e:
@@ -464,7 +464,7 @@ def import_config(ctx, config_file, force, dry_run, skip_existing):
                             if 'token' in token_data:
                                 create_data['token'] = token_data['token']
                             
-                            client.post_sync('/api/v1/tokens/', create_data)
+                            client.post_sync('/tokens/', create_data)
                             stats['success'] += 1
                     except Exception as e:
                         stats['failed'] += 1
@@ -480,7 +480,7 @@ def import_config(ctx, config_file, force, dry_run, skip_existing):
                         if dry_run:
                             console.print(f"  [dim]Would register external service: {service['service_name']}[/dim]")
                         else:
-                            client.post_sync('/api/v1/services/external', service)
+                            client.post_sync('/services/external', service)
                             stats['success'] += 1
                     except Exception as e:
                         stats['failed'] += 1
@@ -496,7 +496,7 @@ def import_config(ctx, config_file, force, dry_run, skip_existing):
                         if dry_run:
                             console.print(f"  [dim]Would create Docker service: {service['service_name']}[/dim]")
                         else:
-                            client.post_sync('/api/v1/services/', service)
+                            client.post_sync('/services/', service)
                             stats['success'] += 1
                     except Exception as e:
                         stats['failed'] += 1
@@ -523,7 +523,7 @@ def import_config(ctx, config_file, force, dry_run, skip_existing):
                                     'domains': cert['domains'],
                                     'email': cert.get('email'),
                                 }
-                                client.post_sync('/api/v1/certificates/', cert_data)
+                                client.post_sync('/certificates/', cert_data)
                                 stats['success'] += 1
                     except Exception as e:
                         stats['failed'] += 1
@@ -541,15 +541,15 @@ def import_config(ctx, config_file, force, dry_run, skip_existing):
                         else:
                             # Create proxy
                             proxy_data = {k: v for k, v in proxy.items() if k not in ['auth', 'mcp']}
-                            client.post_sync('/api/v1/proxy/targets/', proxy_data)
+                            client.post_sync('/proxy/targets/', proxy_data)
                             
                             # Configure auth if present
                             if proxy.get('auth'):
-                                client.post_sync(f'/api/v1/proxy/targets/{proxy["hostname"]}/auth', proxy['auth'])
+                                client.post_sync(f'/proxy/targets/{proxy["hostname"]}/auth', proxy['auth'])
                             
                             # Configure MCP if present
                             if proxy.get('mcp'):
-                                client.post_sync(f'/api/v1/proxy/targets/{proxy["hostname"]}/mcp', proxy['mcp'])
+                                client.post_sync(f'/proxy/targets/{proxy["hostname"]}/mcp', proxy['mcp'])
                             
                             stats['success'] += 1
                     except Exception as e:
@@ -566,7 +566,7 @@ def import_config(ctx, config_file, force, dry_run, skip_existing):
                         if dry_run:
                             console.print(f"  [dim]Would create route: {route.get('route_id', route['path_pattern'])}[/dim]")
                         else:
-                            client.post_sync('/api/v1/routes/', route)
+                            client.post_sync('/routes/', route)
                             stats['success'] += 1
                     except Exception as e:
                         stats['failed'] += 1

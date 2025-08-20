@@ -23,11 +23,11 @@ def list_routes(ctx, scope, formatted):
         client = ctx.ensure_client()
         
         if formatted:
-            routes = client.get_sync('/api/v1/routes/formatted')
+            routes = client.get_sync('/routes/formatted')
             # Formatted endpoint returns text, not JSON
             console.print(routes)
         else:
-            routes = client.get_sync('/api/v1/routes/')
+            routes = client.get_sync('/routes/')
             
             # Filter by scope if specified
             if scope != 'all':
@@ -67,7 +67,7 @@ def create_route(ctx, path, target_type, target_value, priority, methods, scope,
         if scope == 'proxy' and proxies:
             data['proxy_hostnames'] = proxies.split(',')
         
-        result = client.post_sync('/api/v1/routes/', data)
+        result = client.post_sync('/routes/', data)
         
         console.print(f"[green]Route created successfully![/green]")
         ctx.output(result)
@@ -82,7 +82,7 @@ def show_route(ctx, route_id):
     """Show detailed route information."""
     try:
         client = ctx.ensure_client()
-        route = client.get_sync(f'/api/v1/routes/{route_id}')
+        route = client.get_sync(f'/routes/{route_id}')
         ctx.output(route, title=f"Route: {route_id}")
     except Exception as e:
         ctx.handle_error(e)
@@ -100,7 +100,7 @@ def delete_route(ctx, route_id, force):
                 return
         
         client = ctx.ensure_client()
-        client.delete_sync(f'/api/v1/routes/{route_id}')
+        client.delete_sync(f'/routes/{route_id}')
         
         console.print(f"[green]Route '{route_id}' deleted successfully![/green]")
     except Exception as e:
@@ -139,7 +139,7 @@ def create_global_route(ctx, path, target_type, target_value, priority, methods,
         if description:
             data['description'] = description
         
-        result = client.post_sync('/api/v1/routes/', data)
+        result = client.post_sync('/routes/', data)
         
         console.print(f"[green]Global route created successfully![/green]")
         ctx.output(result)
@@ -186,7 +186,7 @@ def create_proxy_route(ctx, path, target_type, target_value, proxies, priority, 
         if description:
             data['description'] = description
         
-        result = client.post_sync('/api/v1/routes/', data)
+        result = client.post_sync('/routes/', data)
         
         console.print(f"[green]Proxy-specific route created for {', '.join(proxy_list)}![/green]")
         ctx.output(result)
@@ -206,7 +206,7 @@ def list_routes_by_scope(ctx, scope, proxy, formatted):
         
         # Get all routes
         if formatted:
-            routes = client.get_sync('/api/v1/routes/formatted')
+            routes = client.get_sync('/routes/formatted')
             console.print(routes)
             return
         
@@ -219,10 +219,10 @@ def list_routes_by_scope(ctx, scope, proxy, formatted):
         
         try:
             # Try with parameters first
-            routes = client.get_sync('/api/v1/routes/', params)
+            routes = client.get_sync('/routes/', params)
         except Exception:
             # Fall back to client-side filtering
-            routes = client.get_sync('/api/v1/routes/')
+            routes = client.get_sync('/routes/')
             
             if scope != 'all':
                 routes = [r for r in routes if r.get('scope') == scope]
@@ -255,7 +255,7 @@ def update_route(ctx, route_id, priority, enabled, methods, description):
         client = ctx.ensure_client()
         
         # Get current route
-        current = client.get_sync(f'/api/v1/routes/{route_id}')
+        current = client.get_sync(f'/routes/{route_id}')
         
         # Build update data
         data = dict(current)
@@ -272,7 +272,7 @@ def update_route(ctx, route_id, priority, enabled, methods, description):
         if description is not None:
             data['description'] = description
         
-        result = client.put_sync(f'/api/v1/routes/{route_id}', data)
+        result = client.put_sync(f'/routes/{route_id}', data)
         
         console.print(f"[green]Route '{route_id}' updated successfully![/green]")
         ctx.output(result)
@@ -288,7 +288,7 @@ def list_routes_formatted(ctx):
     """List all routing rules in formatted display."""
     try:
         client = ctx.ensure_client()
-        formatted = client.get_sync('/api/v1/routes/formatted')
+        formatted = client.get_sync('/routes/formatted')
         
         # Formatted endpoint returns text, not JSON
         console.print(formatted)

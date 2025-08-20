@@ -209,7 +209,7 @@ proxy-client service external register api-gateway https://gateway.example.com
 proxy-client route list
 
 # Create a route
-proxy-client route create /api/v1/ service auth --priority 100
+proxy-client route create /auth/ service auth --priority 100
 
 # Create proxy-specific route
 proxy-client route create-proxy /admin/ port 8080 api.example.com --priority 90

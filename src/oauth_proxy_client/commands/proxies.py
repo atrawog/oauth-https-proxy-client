@@ -19,7 +19,7 @@ def list_proxies(ctx):
     """List all proxy targets."""
     try:
         client = ctx.ensure_client()
-        proxies = client.get_sync('/api/v1/proxy/targets/')
+        proxies = client.get_sync('/proxy/targets/')
         ctx.output(proxies, title="Proxy Targets", data_type='proxies')
     except Exception as e:
         ctx.handle_error(e)
@@ -61,7 +61,7 @@ def create_proxy(ctx, hostname, target_url, cert_name, email, staging, preserve_
             if email:
                 data['cert_email'] = email
         
-        result = client.post_sync('/api/v1/proxy/targets/', data)
+        result = client.post_sync('/proxy/targets/', data)
         
         # Check certificate status
         proxy_target = result.get('proxy_target', {})
@@ -96,7 +96,7 @@ def show_proxy(ctx, hostname):
     """Show proxy details."""
     try:
         client = ctx.ensure_client()
-        proxy = client.get_sync(f'/api/v1/proxy/targets/{hostname}')
+        proxy = client.get_sync(f'/proxy/targets/{hostname}')
         ctx.output(proxy, title=f"Proxy: {hostname}")
     except Exception as e:
         ctx.handle_error(e)
@@ -120,7 +120,7 @@ def delete_proxy(ctx, hostname, force, delete_cert):
         if delete_cert:
             params['delete_cert'] = 'true'
         
-        client.delete_sync(f'/api/v1/proxy/targets/{hostname}')
+        client.delete_sync(f'/proxy/targets/{hostname}')
         
         console.print(f"[green]Proxy '{hostname}' deleted successfully![/green]")
     except Exception as e:
@@ -157,7 +157,7 @@ def enable_auth(ctx, hostname, auth_proxy, mode, users, scopes):
         if scopes:
             data['auth_allowed_scopes'] = scopes.split(',')
         
-        result = client.post_sync(f'/api/v1/proxy/targets/{hostname}/auth', data)
+        result = client.post_sync(f'/proxy/targets/{hostname}/auth', data)
         
         console.print(f"[green]Authentication enabled for {hostname}![/green]")
         ctx.output(result)
@@ -172,7 +172,7 @@ def disable_auth(ctx, hostname):
     """Disable OAuth authentication for a proxy."""
     try:
         client = ctx.ensure_client()
-        client.delete_sync(f'/api/v1/proxy/targets/{hostname}/auth')
+        client.delete_sync(f'/proxy/targets/{hostname}/auth')
         
         console.print(f"[green]Authentication disabled for {hostname}![/green]")
     except Exception as e:
@@ -193,7 +193,7 @@ def config_auth(ctx, hostname, users, emails, groups, scopes, audiences):
         client = ctx.ensure_client()
         
         # Get current auth configuration first
-        current_config = client.get_sync(f'/api/v1/proxy/targets/{hostname}/auth')
+        current_config = client.get_sync(f'/proxy/targets/{hostname}/auth')
         
         # Build update payload with current config as base
         data = {
@@ -227,7 +227,7 @@ def config_auth(ctx, hostname, users, emails, groups, scopes, audiences):
         if audiences:
             data['auth_allowed_audiences'] = [a.strip() for a in audiences.split(',')]
         
-        result = client.post_sync(f'/api/v1/proxy/targets/{hostname}/auth', data)
+        result = client.post_sync(f'/proxy/targets/{hostname}/auth', data)
         
         console.print(f"[green]Authentication configuration updated for {hostname}![/green]")
         ctx.output(result)
@@ -242,7 +242,7 @@ def show_auth(ctx, hostname):
     """Show authentication configuration for a proxy."""
     try:
         client = ctx.ensure_client()
-        auth_config = client.get_sync(f'/api/v1/proxy/targets/{hostname}/auth')
+        auth_config = client.get_sync(f'/proxy/targets/{hostname}/auth')
         ctx.output(auth_config, title=f"Authentication Config: {hostname}")
     except Exception as e:
         ctx.handle_error(e)
@@ -294,7 +294,7 @@ def set_resource(ctx, hostname, endpoint, scopes, stateful, override_backend, be
             console.print(f"[red]Invalid JSON for custom-metadata: {custom_metadata}[/red]")
             return
         
-        result = client.post_sync(f'/api/v1/proxy/targets/{hostname}/resource', data)
+        result = client.post_sync(f'/proxy/targets/{hostname}/resource', data)
         
         console.print(f"[green]Protected resource metadata configured for {hostname}![/green]")
         ctx.output(result)
@@ -309,7 +309,7 @@ def show_resource(ctx, hostname):
     """Show protected resource metadata for a proxy."""
     try:
         client = ctx.ensure_client()
-        resource_config = client.get_sync(f'/api/v1/proxy/targets/{hostname}/resource')
+        resource_config = client.get_sync(f'/proxy/targets/{hostname}/resource')
         ctx.output(resource_config, title=f"Protected Resource Config: {hostname}")
     except Exception as e:
         ctx.handle_error(e)
@@ -327,7 +327,7 @@ def clear_resource(ctx, hostname, force):
                 return
         
         client = ctx.ensure_client()
-        client.delete_sync(f'/api/v1/proxy/targets/{hostname}/resource')
+        client.delete_sync(f'/proxy/targets/{hostname}/resource')
         
         console.print(f"[green]Protected resource metadata cleared for {hostname}![/green]")
     except Exception as e:
@@ -340,7 +340,7 @@ def list_resources(ctx):
     """List all protected resources."""
     try:
         client = ctx.ensure_client()
-        resources = client.get_sync('/api/v1/resources/')
+        resources = client.get_sync('/resources/')
         ctx.output(resources, title="Protected Resources")
     except Exception as e:
         ctx.handle_error(e)
@@ -392,7 +392,7 @@ def set_oauth_server(ctx, hostname, issuer, scopes, grant_types, response_types,
         if custom_metadata:
             data['custom_metadata'] = json.loads(custom_metadata)
         
-        result = client.post_sync(f'/api/v1/proxy/targets/{hostname}/oauth-server', data)
+        result = client.post_sync(f'/proxy/targets/{hostname}/oauth-server', data)
         
         console.print(f"[green]✓ OAuth server configuration updated for {hostname}![/green]")
         if result.get('oauth_server_config'):
@@ -414,7 +414,7 @@ def show_oauth_server(ctx, hostname):
     """Show OAuth server configuration for a proxy."""
     try:
         client = ctx.ensure_client()
-        result = client.get_sync(f'/api/v1/proxy/targets/{hostname}/oauth-server')
+        result = client.get_sync(f'/proxy/targets/{hostname}/oauth-server')
         
         if result.get('status') == 'not_configured':
             console.print(f"[yellow]No custom OAuth server configuration for {hostname}[/yellow]")
@@ -437,7 +437,7 @@ def clear_oauth_server(ctx, hostname, force):
                 return
         
         client = ctx.ensure_client()
-        client.delete_sync(f'/api/v1/proxy/targets/{hostname}/oauth-server')
+        client.delete_sync(f'/proxy/targets/{hostname}/oauth-server')
         
         console.print(f"[green]OAuth server configuration cleared for {hostname}![/green]")
     except Exception as e:
@@ -450,7 +450,7 @@ def list_oauth_servers(ctx):
     """List proxies with custom OAuth server configurations."""
     try:
         client = ctx.ensure_client()
-        result = client.get_sync('/api/v1/proxy/targets/oauth-servers/configured')
+        result = client.get_sync('/proxy/targets/oauth-servers/configured')
         
         if result.get('count', 0) == 0:
             console.print("[yellow]No proxies with custom OAuth server configurations[/yellow]")
@@ -469,7 +469,7 @@ def list_proxies_formatted(ctx):
     """List all proxy targets in formatted display."""
     try:
         client = ctx.ensure_client()
-        formatted = client.get_sync('/api/v1/proxy/targets/formatted')
+        formatted = client.get_sync('/proxy/targets/formatted')
         
         # Formatted endpoint returns text, not JSON
         console.print(formatted)
@@ -494,7 +494,7 @@ def update_proxy(ctx, hostname, target_url, cert_name, preserve_host, enable_htt
         client = ctx.ensure_client()
         
         # Get current configuration
-        current = client.get_sync(f'/api/v1/proxy/targets/{hostname}')
+        current = client.get_sync(f'/proxy/targets/{hostname}')
         
         # Build update data
         data = dict(current)
@@ -514,7 +514,7 @@ def update_proxy(ctx, hostname, target_url, cert_name, preserve_host, enable_htt
         if custom_response_headers:
             data['custom_response_headers'] = json.loads(custom_response_headers)
         
-        result = client.put_sync(f'/api/v1/proxy/targets/{hostname}', data)
+        result = client.put_sync(f'/proxy/targets/{hostname}', data)
         
         console.print(f"[green]Proxy '{hostname}' updated successfully![/green]")
         ctx.output(result)
@@ -537,7 +537,7 @@ def list_proxy_routes(ctx, hostname):
     """List routes for a specific proxy."""
     try:
         client = ctx.ensure_client()
-        routes = client.get_sync(f'/api/v1/proxy/targets/{hostname}/routes')
+        routes = client.get_sync(f'/proxy/targets/{hostname}/routes')
         ctx.output(routes, title=f"Routes for proxy: {hostname}")
     except Exception as e:
         ctx.handle_error(e)
@@ -555,7 +555,7 @@ def update_proxy_routes(ctx, hostname, route_mode, enabled_routes, disabled_rout
         client = ctx.ensure_client()
         
         # Get current proxy config
-        proxy = client.get_sync(f'/api/v1/proxy/targets/{hostname}')
+        proxy = client.get_sync(f'/proxy/targets/{hostname}')
         
         data = {
             'route_mode': route_mode or proxy.get('route_mode', 'all'),
@@ -563,7 +563,7 @@ def update_proxy_routes(ctx, hostname, route_mode, enabled_routes, disabled_rout
             'disabled_routes': disabled_routes.split(',') if disabled_routes else proxy.get('disabled_routes', [])
         }
         
-        result = client.put_sync(f'/api/v1/proxy/targets/{hostname}/routes', data)
+        result = client.put_sync(f'/proxy/targets/{hostname}/routes', data)
         
         console.print(f"[green]Routes updated for proxy '{hostname}'![/green]")
         ctx.output(result)
@@ -579,7 +579,7 @@ def enable_proxy_route(ctx, hostname, route_id):
     """Enable a specific route for a proxy."""
     try:
         client = ctx.ensure_client()
-        result = client.post_sync(f'/api/v1/proxy/targets/{hostname}/routes/{route_id}/enable', {})
+        result = client.post_sync(f'/proxy/targets/{hostname}/routes/{route_id}/enable', {})
         
         console.print(f"[green]Route '{route_id}' enabled for proxy '{hostname}'![/green]")
         ctx.output(result)
@@ -595,7 +595,7 @@ def disable_proxy_route(ctx, hostname, route_id):
     """Disable a specific route for a proxy."""
     try:
         client = ctx.ensure_client()
-        result = client.post_sync(f'/api/v1/proxy/targets/{hostname}/routes/{route_id}/disable', {})
+        result = client.post_sync(f'/proxy/targets/{hostname}/routes/{route_id}/disable', {})
         
         console.print(f"[green]Route '{route_id}' disabled for proxy '{hostname}'![/green]")
         ctx.output(result)

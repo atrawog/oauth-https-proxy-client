@@ -114,7 +114,7 @@ proxy-client route list
 proxy-client route list --formatted
 
 # Create global route to service
-proxy-client route create /api/v1/ service auth \
+proxy-client route create /auth/ service auth \
   --priority 100 \
   --methods GET,POST
 

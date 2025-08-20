@@ -56,12 +56,12 @@ def proxy_quickstart(ctx, hostname, target_url, enable_auth, auth_proxy, auth_us
                     cert_data['email'] = email
                 
                 try:
-                    cert_result = client.post_sync('/api/v1/certificates/', cert_data)
+                    cert_result = client.post_sync('/certificates/', cert_data)
                     
                     # Wait for certificate generation
                     max_attempts = 60
                     for attempt in range(max_attempts):
-                        status = client.get_sync(f'/api/v1/certificates/{cert_data["cert_name"]}/status')
+                        status = client.get_sync(f'/certificates/{cert_data["cert_name"]}/status')
                         if status.get('status') == 'completed':
                             progress.update(task, description="[green]Certificate created![/green]")
                             break
@@ -91,7 +91,7 @@ def proxy_quickstart(ctx, hostname, target_url, enable_auth, auth_proxy, auth_us
             if cert_data['cert_name']:
                 proxy_data['cert_name'] = cert_data['cert_name']
             
-            proxy_result = client.post_sync('/api/v1/proxy/targets/', proxy_data)
+            proxy_result = client.post_sync('/proxy/targets/', proxy_data)
             progress.update(task, description="[green]Proxy created![/green]")
             
             # Step 3: Configure authentication if requested
@@ -117,7 +117,7 @@ def proxy_quickstart(ctx, hostname, target_url, enable_auth, auth_proxy, auth_us
                 if auth_users:
                     auth_data['auth_required_users'] = auth_users.split(',')
                 
-                client.post_sync(f'/api/v1/proxy/targets/{hostname}/auth', auth_data)
+                client.post_sync(f'/proxy/targets/{hostname}/auth', auth_data)
                 progress.update(task, description="[green]Authentication configured![/green]")
                 
                 # Step 4: Setup OAuth routes
@@ -147,7 +147,7 @@ def proxy_quickstart(ctx, hostname, target_url, enable_auth, auth_proxy, auth_us
                     }
                     
                     try:
-                        client.post_sync('/api/v1/routes/', route_data)
+                        client.post_sync('/routes/', route_data)
                     except Exception:
                         # Route might already exist
                         pass
@@ -214,7 +214,7 @@ def service_with_proxy(ctx, name, image, port, hostname, enable_https, memory, c
             if env:
                 service_data['environment'] = dict(e.split('=', 1) for e in env)
             
-            service_result = client.post_sync('/api/v1/services/', service_data)
+            service_result = client.post_sync('/services/', service_data)
             progress.update(task, description="[green]Service created![/green]")
             
             # Step 2: Wait for service to be healthy
@@ -223,7 +223,7 @@ def service_with_proxy(ctx, name, image, port, hostname, enable_https, memory, c
             max_attempts = 30
             for attempt in range(max_attempts):
                 try:
-                    stats = client.get_sync(f'/api/v1/services/{name}/stats')
+                    stats = client.get_sync(f'/services/{name}/stats')
                     if stats.get('status') == 'running':
                         progress.update(task, description="[green]Service is running![/green]")
                         break
@@ -249,12 +249,12 @@ def service_with_proxy(ctx, name, image, port, hostname, enable_https, memory, c
                 }
                 
                 try:
-                    cert_result = client.post_sync('/api/v1/certificates/', cert_data)
+                    cert_result = client.post_sync('/certificates/', cert_data)
                     cert_name = cert_data['cert_name']
                     
                     # Wait for certificate
                     for attempt in range(60):
-                        status = client.get_sync(f'/api/v1/certificates/{cert_name}/status')
+                        status = client.get_sync(f'/certificates/{cert_name}/status')
                         if status.get('status') == 'completed':
                             break
                         elif status.get('status') == 'failed':
@@ -278,7 +278,7 @@ def service_with_proxy(ctx, name, image, port, hostname, enable_https, memory, c
             if cert_name:
                 proxy_data['cert_name'] = cert_name
             
-            proxy_result = client.post_sync('/api/v1/proxy/targets/', proxy_data)
+            proxy_result = client.post_sync('/proxy/targets/', proxy_data)
             progress.update(task, description="[green]Proxy created![/green]")
         
         # Show summary
@@ -327,7 +327,7 @@ def oauth_setup(ctx, domain, generate_key, github_client_id, github_client_secre
                 task = progress.add_task("Generating JWT RSA key...", total=None)
                 
                 try:
-                    key_result = client.post_sync('/api/v1/oauth/key/generate')
+                    key_result = client.post_sync('/oauth/key/generate')
                     progress.update(task, description="[green]JWT key generated![/green]")
                     console.print(f"\n[yellow]Save this key in your .env file:[/yellow]")
                     console.print(f"OAUTH_JWT_PRIVATE_KEY_B64={key_result.get('private_key_b64')[:50]}...")
@@ -343,11 +343,11 @@ def oauth_setup(ctx, domain, generate_key, github_client_id, github_client_secre
             }
             
             try:
-                cert_result = client.post_sync('/api/v1/certificates/', cert_data)
+                cert_result = client.post_sync('/certificates/', cert_data)
                 
                 # Wait for certificate
                 for attempt in range(60):
-                    status = client.get_sync(f'/api/v1/certificates/{cert_data["cert_name"]}/status')
+                    status = client.get_sync(f'/certificates/{cert_data["cert_name"]}/status')
                     if status.get('status') == 'completed':
                         progress.update(task, description="[green]Certificate created![/green]")
                         break
@@ -373,7 +373,7 @@ def oauth_setup(ctx, domain, generate_key, github_client_id, github_client_secre
                 proxy_data['cert_name'] = cert_data['cert_name']
             
             try:
-                proxy_result = client.post_sync('/api/v1/proxy/targets/', proxy_data)
+                proxy_result = client.post_sync('/proxy/targets/', proxy_data)
                 progress.update(task, description="[green]OAuth proxy created![/green]")
             except Exception as e:
                 if 'already exists' in str(e).lower():
@@ -411,7 +411,7 @@ def oauth_setup(ctx, domain, generate_key, github_client_id, github_client_secre
                 }
                 
                 try:
-                    client.post_sync('/api/v1/routes/', route_data)
+                    client.post_sync('/routes/', route_data)
                     routes_created += 1
                 except Exception:
                     # Route might already exist
@@ -431,7 +431,7 @@ def oauth_setup(ctx, domain, generate_key, github_client_id, github_client_secre
                     'routing_enabled': True,
                 }
                 
-                client.post_sync('/api/v1/services/external', service_data)
+                client.post_sync('/services/external', service_data)
                 progress.update(task, description="[green]OAuth service registered![/green]")
             except Exception as e:
                 if 'already exists' in str(e).lower():
@@ -507,7 +507,7 @@ def cleanup_resources(ctx, orphaned_only, force):
             # Clean up orphaned services
             task = progress.add_task("Cleaning up orphaned services...", total=None)
             try:
-                result = client.post_sync('/api/v1/services/cleanup')
+                result = client.post_sync('/services/cleanup')
                 if result.get('removed'):
                     stats['services'] = len(result['removed'])
                 progress.update(task, description=f"[green]Cleaned {stats['services']} services[/green]")
@@ -518,15 +518,15 @@ def cleanup_resources(ctx, orphaned_only, force):
                 # Clean up unused certificates
                 task = progress.add_task("Finding unused certificates...", total=None)
                 try:
-                    certs = client.get_sync('/api/v1/certificates/')
-                    proxies = client.get_sync('/api/v1/proxy/targets/')
+                    certs = client.get_sync('/certificates/')
+                    proxies = client.get_sync('/proxy/targets/')
                     
                     used_certs = {p.get('cert_name') for p in proxies if p.get('cert_name')}
                     
                     for cert in certs:
                         if cert['cert_name'] not in used_certs:
                             try:
-                                client.delete_sync(f'/api/v1/certificates/{cert["cert_name"]}')
+                                client.delete_sync(f'/certificates/{cert["cert_name"]}')
                                 stats['certificates'] += 1
                             except Exception:
                                 pass
@@ -538,15 +538,15 @@ def cleanup_resources(ctx, orphaned_only, force):
                 # Clean up stale routes
                 task = progress.add_task("Cleaning up stale routes...", total=None)
                 try:
-                    routes = client.get_sync('/api/v1/routes/')
-                    services = client.get_sync('/api/v1/services/unified')
+                    routes = client.get_sync('/routes/')
+                    services = client.get_sync('/services/unified')
                     service_names = {s['service_name'] for s in services}
                     
                     for route in routes:
                         if route.get('target_type') == 'service':
                             if route.get('target_value') not in service_names:
                                 try:
-                                    client.delete_sync(f'/api/v1/routes/{route["route_id"]}')
+                                    client.delete_sync(f'/routes/{route["route_id"]}')
                                     stats['routes'] += 1
                                 except Exception:
                                     pass

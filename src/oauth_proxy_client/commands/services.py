@@ -22,11 +22,11 @@ def list_services(ctx, service_type):
         client = ctx.ensure_client()
         
         if service_type == 'all':
-            services = client.get_sync('/api/v1/services/unified')
+            services = client.get_sync('/services/unified')
         elif service_type == 'docker':
-            services = client.get_sync('/api/v1/services/')
+            services = client.get_sync('/services/')
         else:  # external
-            services = client.get_sync('/api/v1/services/external')
+            services = client.get_sync('/services/external')
         
         ctx.output(services, title=f"Services ({service_type})", data_type='services')
     except Exception as e:
@@ -60,7 +60,7 @@ def create_service(ctx, name, image, port, memory, cpu, env):
         if env:
             data['environment'] = dict(e.split('=', 1) for e in env)
         
-        result = client.post_sync('/api/v1/services/', data)
+        result = client.post_sync('/services/', data)
         
         console.print(f"[green]Service '{name}' created successfully![/green]")
         ctx.output(result)
@@ -80,7 +80,7 @@ def delete_service(ctx, name, force):
                 return
         
         client = ctx.ensure_client()
-        client.delete_sync(f'/api/v1/services/{name}')
+        client.delete_sync(f'/services/{name}')
         
         console.print(f"[green]Service '{name}' deleted successfully![/green]")
     except Exception as e:
@@ -94,7 +94,7 @@ def start_service(ctx, name):
     """Start a service."""
     try:
         client = ctx.ensure_client()
-        client.post_sync(f'/api/v1/services/{name}/start')
+        client.post_sync(f'/services/{name}/start')
         console.print(f"[green]Service '{name}' started![/green]")
     except Exception as e:
         ctx.handle_error(e)
@@ -107,7 +107,7 @@ def stop_service(ctx, name):
     """Stop a service."""
     try:
         client = ctx.ensure_client()
-        client.post_sync(f'/api/v1/services/{name}/stop')
+        client.post_sync(f'/services/{name}/stop')
         console.print(f"[green]Service '{name}' stopped![/green]")
     except Exception as e:
         ctx.handle_error(e)
@@ -120,7 +120,7 @@ def restart_service(ctx, name):
     """Restart a service."""
     try:
         client = ctx.ensure_client()
-        client.post_sync(f'/api/v1/services/{name}/restart')
+        client.post_sync(f'/services/{name}/restart')
         console.print(f"[green]Service '{name}' restarted![/green]")
     except Exception as e:
         ctx.handle_error(e)
@@ -140,7 +140,7 @@ def service_logs(ctx, name, lines, follow):
         if follow:
             params['follow'] = 'true'
         
-        logs = client.get_sync(f'/api/v1/services/{name}/logs', params)
+        logs = client.get_sync(f'/services/{name}/logs', params)
         
         # Logs are returned as text
         console.print(logs)
@@ -175,7 +175,7 @@ def register_external(ctx, name, target_url, description):
         if description:
             data['description'] = description
         
-        result = client.post_sync('/api/v1/services/external', data)
+        result = client.post_sync('/services/external', data)
         
         console.print(f"[green]External service '{name}' registered successfully![/green]")
         ctx.output(result)
@@ -189,7 +189,7 @@ def list_external(ctx):
     """List all external services."""
     try:
         client = ctx.ensure_client()
-        services = client.get_sync('/api/v1/services/external')
+        services = client.get_sync('/services/external')
         ctx.output(services, title="External Services")
     except Exception as e:
         ctx.handle_error(e)
@@ -202,7 +202,7 @@ def show_external(ctx, name):
     """Show external service details."""
     try:
         client = ctx.ensure_client()
-        service = client.get_sync(f'/api/v1/services/external/{name}')
+        service = client.get_sync(f'/services/external/{name}')
         ctx.output(service, title=f"External Service: {name}")
     except Exception as e:
         ctx.handle_error(e)
@@ -225,7 +225,7 @@ def update_external(ctx, name, target_url, description):
         if description is not None:
             data['description'] = description
         
-        result = client.put_sync(f'/api/v1/services/external/{name}', data)
+        result = client.put_sync(f'/services/external/{name}', data)
         
         console.print(f"[green]External service '{name}' updated successfully![/green]")
         ctx.output(result)
@@ -245,7 +245,7 @@ def unregister_external(ctx, name, force):
                 return
         
         client = ctx.ensure_client()
-        client.delete_sync(f'/api/v1/services/external/{name}')
+        client.delete_sync(f'/services/external/{name}')
         
         console.print(f"[green]External service '{name}' unregistered successfully![/green]")
     except Exception as e:
@@ -263,7 +263,7 @@ def show_service(ctx, name):
         
         # Try Docker service first
         try:
-            service = client.get_sync(f'/api/v1/services/{name}')
+            service = client.get_sync(f'/services/{name}')
             ctx.output(service, title=f"Docker Service: {name}")
             return
         except Exception:
@@ -271,7 +271,7 @@ def show_service(ctx, name):
         
         # Try external service
         try:
-            service = client.get_sync(f'/api/v1/services/external/{name}')
+            service = client.get_sync(f'/services/external/{name}')
             ctx.output(service, title=f"External Service: {name}")
             return
         except Exception:
@@ -289,7 +289,7 @@ def service_stats(ctx, name):
     """Show service statistics."""
     try:
         client = ctx.ensure_client()
-        stats = client.get_sync(f'/api/v1/services/{name}/stats')
+        stats = client.get_sync(f'/services/{name}/stats')
         ctx.output(stats, title=f"Service Stats: {name}")
     except Exception as e:
         ctx.handle_error(e)
@@ -306,7 +306,7 @@ def cleanup_services(ctx, force):
                 return
         
         client = ctx.ensure_client()
-        result = client.post_sync('/api/v1/services/cleanup')
+        result = client.post_sync('/services/cleanup')
         
         console.print("[green]Service cleanup completed![/green]")
         ctx.output(result)
@@ -349,7 +349,7 @@ def add_port(ctx, service_name, port, bind_address, name, protocol, source_token
         if source_token:
             data['source_token'] = source_token
         
-        result = client.post_sync(f'/api/v1/services/{service_name}/ports', data)
+        result = client.post_sync(f'/services/{service_name}/ports', data)
         
         console.print(f"[green]Port {port} added to service '{service_name}'![/green]")
         ctx.output(result)
@@ -370,7 +370,7 @@ def remove_port(ctx, service_name, port_name, force):
                 return
         
         client = ctx.ensure_client()
-        client.delete_sync(f'/api/v1/services/{service_name}/ports/{port_name}')
+        client.delete_sync(f'/services/{service_name}/ports/{port_name}')
         
         console.print(f"[green]Port '{port_name}' removed from service '{service_name}'![/green]")
     except Exception as e:
@@ -384,7 +384,7 @@ def list_ports(ctx, service_name):
     """List all ports for a service."""
     try:
         client = ctx.ensure_client()
-        ports = client.get_sync(f'/api/v1/services/{service_name}/ports')
+        ports = client.get_sync(f'/services/{service_name}/ports')
         ctx.output(ports, title=f"Ports for service: {service_name}")
     except Exception as e:
         ctx.handle_error(e)
@@ -404,7 +404,7 @@ def check_port(ctx, port, bind_address):
             'bind_address': bind_address,
         }
         
-        result = client.post_sync('/api/v1/services/ports/check', data)
+        result = client.post_sync('/services/ports/check', data)
         
         if result.get('available'):
             console.print(f"[green]✓ Port {port} on {bind_address} is available[/green]")
@@ -431,10 +431,10 @@ def global_ports(ctx, available_only):
             params['available_only'] = 'true'
             
         if available_only:
-            result = client.get_sync('/api/v1/services/ports/available', params)
+            result = client.get_sync('/services/ports/available', params)
             ctx.output(result, title="Available Port Ranges")
         else:
-            result = client.get_sync('/api/v1/services/ports', params)
+            result = client.get_sync('/services/ports', params)
             ctx.output(result, title="Allocated Ports")
     except Exception as e:
         ctx.handle_error(e)
@@ -477,7 +477,7 @@ def create_exposed_service(ctx, name, image, port, bind_address, memory, cpu, en
         if env:
             data['environment'] = dict(e.split('=', 1) for e in env)
         
-        result = client.post_sync('/api/v1/services/', data)
+        result = client.post_sync('/services/', data)
         
         console.print(f"[green]Service '{name}' created with exposed port {port}![/green]")
         ctx.output(result)
@@ -505,7 +505,7 @@ def create_service_proxy(ctx, service_name, hostname, enable_https, staging):
         if hostname:
             data['hostname'] = hostname
         
-        result = client.post_sync(f'/api/v1/services/{service_name}/proxy', data)
+        result = client.post_sync(f'/services/{service_name}/proxy', data)
         
         console.print(f"[green]Proxy created for service '{service_name}'![/green]")
         ctx.output(result)
@@ -532,7 +532,7 @@ def update_service(ctx, service_name, image, internal_port, memory_limit, cpu_li
         client = ctx.ensure_client()
         
         # Get current configuration
-        current = client.get_sync(f'/api/v1/services/{service_name}')
+        current = client.get_sync(f'/services/{service_name}')
         
         # Build update data
         data = dict(current)
@@ -552,7 +552,7 @@ def update_service(ctx, service_name, image, internal_port, memory_limit, cpu_li
         if bind_address:
             data['bind_address'] = bind_address
         
-        result = client.put_sync(f'/api/v1/services/{service_name}', data)
+        result = client.put_sync(f'/services/{service_name}', data)
         
         console.print(f"[green]Service '{service_name}' updated successfully![/green]")
         ctx.output(result)
@@ -575,7 +575,7 @@ def update_port(ctx, service_name, port_name, host_port, container_port, bind_ad
         client = ctx.ensure_client()
         
         # Get current port configuration
-        ports = client.get_sync(f'/api/v1/services/{service_name}/ports')
+        ports = client.get_sync(f'/services/{service_name}/ports')
         current = next((p for p in ports if p.get('port_name') == port_name), None)
         
         if not current:
@@ -596,7 +596,7 @@ def update_port(ctx, service_name, port_name, host_port, container_port, bind_ad
         if source_token:
             data['source_token'] = source_token
         
-        result = client.put_sync(f'/api/v1/services/{service_name}/ports/{port_name}', data)
+        result = client.put_sync(f'/services/{service_name}/ports/{port_name}', data)
         
         console.print(f"[green]Port '{port_name}' updated successfully![/green]")
         ctx.output(result)
@@ -613,10 +613,10 @@ def list_global_ports(ctx, available_only):
         client = ctx.ensure_client()
         
         if available_only:
-            ports = client.get_sync('/api/v1/services/ports/available')
+            ports = client.get_sync('/services/ports/available')
             ctx.output(ports, title="Available Port Ranges")
         else:
-            ports = client.get_sync('/api/v1/services/ports')
+            ports = client.get_sync('/services/ports')
             ctx.output(ports, title="All Allocated Ports")
     except Exception as e:
         ctx.handle_error(e)
@@ -636,7 +636,7 @@ def check_port_api(ctx, port, bind_address):
             'bind_address': bind_address
         }
         
-        result = client.post_sync('/api/v1/services/ports/check', data)
+        result = client.post_sync('/services/ports/check', data)
         
         if result.get('available'):
             console.print(f"[green]Port {port} on {bind_address} is available[/green]")
