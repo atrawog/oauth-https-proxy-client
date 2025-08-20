@@ -478,11 +478,24 @@ def clear_logs(ctx, force):
                 return
         
         client = ctx.ensure_client()
-        result = client.delete_sync('/logs')
-        
-        console.print("[green]✓ All logs cleared successfully![/green]")
-        if result and 'deleted_count' in result:
-            console.print(f"  Deleted {result['deleted_count']} log entries")
+        # delete_sync returns boolean, but we want the response data
+        # So we'll make a direct request to get the response
+        try:
+            response = client.request_sync('DELETE', '/logs')
+            if response.status_code == 200:
+                console.print("[green]✓ All logs cleared successfully![/green]")
+                result = response.json()
+                if isinstance(result, dict) and 'cleared_count' in result:
+                    console.print(f"  Deleted {result['cleared_count']} log entries")
+            else:
+                raise Exception(f"Failed to clear logs: {response.status_code}")
+        except Exception as delete_error:
+            # Fallback to simple delete_sync
+            success = client.delete_sync('/logs')
+            if success:
+                console.print("[green]✓ All logs cleared successfully![/green]")
+            else:
+                raise Exception("Failed to clear logs")
     except Exception as e:
         ctx.handle_error(e)
 
