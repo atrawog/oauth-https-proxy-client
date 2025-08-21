@@ -129,9 +129,9 @@ def system_stats(ctx):
         
         try:
             resources = client.get_sync('/resources/')
-            stats['mcp_resources'] = len(resources)
+            stats['resources'] = len(resources)
         except Exception:
-            stats['mcp_resources'] = 'N/A'
+            stats['resources'] = 'N/A'
         
         # Display as table
         if ctx.output_format == 'table' or ctx.output_format == 'auto':
@@ -343,12 +343,6 @@ def export_config(ctx, output, include_tokens, include_secrets):
                     except Exception:
                         pass
                     
-                    # Get MCP config if exists
-                    try:
-                        mcp_config = client.get_sync(f'/proxy/targets/{proxy["hostname"]}/mcp')
-                        proxy['mcp'] = mcp_config
-                    except Exception:
-                        pass
                         
                 config['proxies'] = proxies
                 progress.update(task, description=f"Exported {len(proxies)} proxies")
@@ -540,16 +534,12 @@ def import_config(ctx, config_file, force, dry_run, skip_existing):
                             console.print(f"  [dim]Would create proxy: {proxy['hostname']}[/dim]")
                         else:
                             # Create proxy
-                            proxy_data = {k: v for k, v in proxy.items() if k not in ['auth', 'mcp']}
+                            proxy_data = {k: v for k, v in proxy.items() if k != 'auth'}
                             client.post_sync('/proxy/targets/', proxy_data)
                             
                             # Configure auth if present
                             if proxy.get('auth'):
                                 client.post_sync(f'/proxy/targets/{proxy["hostname"]}/auth', proxy['auth'])
-                            
-                            # Configure MCP if present
-                            if proxy.get('mcp'):
-                                client.post_sync(f'/proxy/targets/{proxy["hostname"]}/mcp', proxy['mcp'])
                             
                             stats['success'] += 1
                     except Exception as e:

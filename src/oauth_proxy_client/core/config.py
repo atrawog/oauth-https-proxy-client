@@ -57,11 +57,6 @@ class Config:
     base_domain: str = field(default_factory=lambda: os.getenv('BASE_DOMAIN', 'localhost'))
     oauth_allowed_github_users: str = field(default_factory=lambda: os.getenv('OAUTH_ALLOWED_GITHUB_USERS', '*'))
     
-    # MCP Configuration
-    mcp_client_id: Optional[str] = field(default_factory=lambda: os.getenv('MCP_CLIENT_ID'))
-    mcp_client_secret: Optional[str] = field(default_factory=lambda: os.getenv('MCP_CLIENT_SECRET'))
-    mcp_server_url: Optional[str] = field(default_factory=lambda: os.getenv('MCP_SERVER_URL'))
-    
     # OAuth Protocol
     oauth_redirect_uri: str = field(default_factory=lambda: os.getenv('OAUTH_REDIRECT_URI', 'urn:ietf:wg:oauth:2.0:oob'))
     

@@ -153,7 +153,7 @@ def oauth_health(ctx):
 @oauth_group.command('register')
 @click.argument('name')
 @click.option('--redirect-uri', default='urn:ietf:wg:oauth:2.0:oob', help='OAuth redirect URI')
-@click.option('--scope', default='mcp:read mcp:write', help='OAuth scopes')
+@click.option('--scope', default='read write', help='OAuth scopes')
 @click.pass_obj
 def register_client(ctx, name, redirect_uri, scope):
     """Register a new OAuth client."""

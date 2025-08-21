@@ -28,7 +28,7 @@ def list_resources(ctx):
 @click.argument('uri')
 @click.argument('proxy-hostname')
 @click.argument('name')
-@click.option('--scopes', default='mcp:read,mcp:write', help='Comma-separated scopes')
+@click.option('--scopes', default='read,write', help='Comma-separated scopes')
 @click.pass_obj
 def register_resource(ctx, uri, proxy_hostname, name, scopes):
     """Register a new protected resource."""

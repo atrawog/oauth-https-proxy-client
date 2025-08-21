@@ -257,8 +257,8 @@ def proxy_resource():
 
 @proxy_resource.command('set')
 @click.argument('hostname')
-@click.option('--endpoint', default='/mcp', help='MCP endpoint path')
-@click.option('--scopes', default='mcp:read,mcp:write', help='Comma-separated list of scopes')
+@click.option('--endpoint', default='/api', help='API endpoint path')
+@click.option('--scopes', default='read,write', help='Comma-separated list of scopes')
 @click.option('--stateful/--stateless', default=False, help='Whether server maintains session state')
 @click.option('--override-backend/--no-override-backend', default=False, help='Override backend metadata endpoint')
 @click.option('--bearer-methods', default='header', help='Bearer token methods (header,query,body)')
