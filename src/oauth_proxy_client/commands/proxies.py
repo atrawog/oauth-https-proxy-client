@@ -147,9 +147,9 @@ def enable_auth(ctx, hostname, auth_proxy, mode, users, scopes):
         client = ctx.ensure_client()
         
         data = {
-            'auth_enabled': True,
+            'enabled': True,  # ProxyAuthConfig expects 'enabled', not 'auth_enabled'
             'auth_proxy': auth_proxy,
-            'auth_mode': mode,
+            'mode': mode,  # ProxyAuthConfig expects 'mode', not 'auth_mode'
         }
         
         if users:
@@ -196,14 +196,15 @@ def config_auth(ctx, hostname, users, emails, groups, scopes, audiences):
         current_config = client.get_sync(f'/proxy/targets/{hostname}/auth')
         
         # Build update payload with current config as base
+        # Map from proxy fields to ProxyAuthConfig fields
         data = {
-            'auth_enabled': current_config.get('auth_enabled', True),
+            'enabled': current_config.get('auth_enabled', True),
             'auth_proxy': current_config.get('auth_proxy'),
-            'auth_mode': current_config.get('auth_mode', 'forward'),
-            'auth_pass_headers': current_config.get('auth_pass_headers', True),
-            'auth_cookie_name': current_config.get('auth_cookie_name', 'unified_auth_token'),
-            'auth_header_prefix': current_config.get('auth_header_prefix', 'X-Auth-'),
-            'auth_excluded_paths': current_config.get('auth_excluded_paths'),
+            'mode': current_config.get('auth_mode', 'forward'),
+            'pass_headers': current_config.get('auth_pass_headers', True),
+            'cookie_name': current_config.get('auth_cookie_name', 'unified_auth_token'),
+            'header_prefix': current_config.get('auth_header_prefix', 'X-Auth-'),
+            'excluded_paths': current_config.get('auth_excluded_paths'),
         }
         
         # Add optional fields if provided

@@ -76,6 +76,37 @@ class TableFormatter(OutputFormatter):
                         keys.append(key)
                         seen.add(key)
             
+            # Limit columns if there are too many (fallback mode)
+            # Smart selection based on common important fields
+            if len(keys) > 10:
+                # Define priority fields for different data types
+                priority_fields = [
+                    # Common identifiers
+                    'hostname', 'name', 'id', 'route_id', 'service_name', 'cert_name', 'client_id',
+                    # Status and state
+                    'status', 'enabled', 'auth_enabled', 'enable_https', 'enable_http',
+                    # Targets and URLs
+                    'target_url', 'target_value', 'path_pattern', 'path',
+                    # Metadata
+                    'created_at', 'created_by', 'owner_token_hash',
+                    # Response data
+                    'method', 'status_code', 'response_time_ms', 'client_ip',
+                ]
+                
+                # Keep only priority fields that exist in the data
+                filtered_keys = []
+                for field in priority_fields:
+                    if field in keys:
+                        filtered_keys.append(field)
+                        if len(filtered_keys) >= 8:  # Max 8 columns in fallback
+                            break
+                
+                # If we still don't have enough, just take the first 8
+                if len(filtered_keys) < 4:
+                    filtered_keys = keys[:8]
+                
+                keys = filtered_keys
+            
             # Add columns
             for key in keys:
                 # Format column headers

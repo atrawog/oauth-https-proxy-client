@@ -14,12 +14,12 @@ registry.register('yaml', YAMLFormatter())
 registry.register('csv', CSVFormatter())
 
 # Convenience function
-def format_output(data, format_type='auto', **kwargs):
+def format_output(data, format_type='table', **kwargs):
     """Format data for output.
     
     Args:
         data: Data to format
-        format_type: Output format ('json', 'table', 'yaml', 'csv', 'auto')
+        format_type: Output format ('json', 'table', 'yaml', 'csv')
         **kwargs: Additional formatter options
     
     Returns:

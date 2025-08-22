@@ -117,16 +117,9 @@ class FormatterRegistry:
         Returns:
             Selected format type
         """
-        # Check if output is to terminal
-        if sys.stdout.isatty():
-            # Terminal output - prefer table for lists/dicts
-            if isinstance(data, (list, dict)):
-                return 'table'
-            else:
-                return 'json'
-        else:
-            # Pipe or redirect - prefer JSON
-            return 'json'
+        # Always use table format for consistency
+        # This avoids confusion and makes debugging easier
+        return 'table'
     
     def list_formats(self) -> List[str]:
         """Get list of available formats.

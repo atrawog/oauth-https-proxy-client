@@ -67,7 +67,13 @@ class Context:
         """
         try:
             formatted = format_output(data, self.output_format, **kwargs)
-            click.echo(formatted)
+            # For table format, the formatter returns a string with ANSI codes
+            # We need to print it directly to stdout, not through Rich console again
+            if self.output_format == 'table' or self.output_format == 'auto':
+                # Print directly to stdout to preserve ANSI codes
+                print(formatted)
+            else:
+                click.echo(formatted)
         except Exception as e:
             if self.debug:
                 console.print_exception()

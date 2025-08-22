@@ -2,11 +2,11 @@
 
 from typing import Any, Dict, List, Optional, Union
 from datetime import datetime
+from io import StringIO
 from rich.console import Console
 from rich.table import Table
 from rich.text import Text
-from rich.box import ROUNDED, MINIMAL, SIMPLE
-from io import StringIO
+from rich.box import ROUNDED, MINIMAL, SIMPLE, SIMPLE_HEAD
 import json
 
 
@@ -58,16 +58,55 @@ class EnhancedTableFormatter:
             'box': ROUNDED,
         },
         'logs': {
-            'columns': ['timestamp', 'client_ip', 'method_path', 'status_code', 'response_time'],
-            'headers': ['Time', 'Client IP', 'Request', 'Status', 'Time (ms)'],
-            'styles': ['dim', 'yellow', 'cyan', 'status_code', 'number'],
-            'box': MINIMAL,
+            'columns': [
+                'timestamp', 
+                'status_code', 
+                'method', 
+                'path', 
+                'response_time_ms',
+                'client_ip',
+                'client_hostname',
+                'proxy_hostname',
+                'user_id',
+                'auth_type',
+                'query',
+                'error'
+            ],
+            'headers': [
+                'Time',
+                'Status',
+                'Method',
+                'Path',
+                'ms',
+                'Client IP',
+                'Client Host',
+                'Proxy',
+                'User',
+                'Auth',
+                'Query',
+                'Error'
+            ],
+            'styles': [
+                'date',          # timestamp
+                'status_code',   # status_code
+                None,           # method
+                None,           # path
+                'number',       # response_time_ms
+                'yellow',       # client_ip
+                'dim',          # client_hostname
+                'cyan',         # proxy_hostname
+                None,           # user_id
+                'dim',          # auth_type
+                'dim',          # query
+                'red'           # error
+            ],
+            'box': SIMPLE_HEAD,
         }
     }
     
     def __init__(self):
         """Initialize the formatter."""
-        self.console = Console(file=StringIO(), force_terminal=True)
+        self.console = Console()
     
     def format(self, data: Any, data_type: Optional[str] = None, **kwargs) -> str:
         """Format data with smart type detection and layout.
@@ -84,6 +123,29 @@ class EnhancedTableFormatter:
         if not data:
             return self._empty_message(data_type)
         
+        # Handle nested response formats like {'total': n, 'logs': [...]} or {'services': [...]}
+        if isinstance(data, dict):
+            # Handle log response format
+            if 'logs' in data:
+                logs_data = data['logs']
+                if data_type == 'logs' or (not data_type and logs_data and self._detect_data_type(logs_data[0]) == 'logs'):
+                    return self._format_logs_multiline(logs_data, **kwargs)
+                data = logs_data
+            # Handle service response format
+            elif 'services' in data and isinstance(data['services'], list):
+                services_data = data['services']
+                # Check if empty
+                if not services_data:
+                    return self._empty_message('services')
+                data = services_data
+                if not data_type:
+                    data_type = 'services'
+            # Handle other nested list responses
+            elif 'items' in data and isinstance(data['items'], list):
+                data = data['items']
+            elif 'results' in data and isinstance(data['results'], list):
+                data = data['results']
+        
         # Convert single item to list
         if isinstance(data, dict) and not self._is_key_value_dict(data):
             data = [data]
@@ -91,6 +153,10 @@ class EnhancedTableFormatter:
         # Auto-detect data type if not provided
         if not data_type and isinstance(data, list) and data:
             data_type = self._detect_data_type(data[0])
+        
+        # Special multi-line format for logs
+        if data_type == 'logs':
+            return self._format_logs_multiline(data, **kwargs)
         
         # Prepare data for display
         prepared_data = self._prepare_data(data, data_type)
@@ -130,7 +196,7 @@ class EnhancedTableFormatter:
             return 'oauth_tokens'
         elif 'client_id' in sample and ('client_secret' in sample or 'client_name' in sample):
             return 'oauth_clients'
-        elif 'client_ip' in sample or 'request_path' in sample:
+        elif 'client_ip' in sample or 'proxy_hostname' in sample or 'response_time_ms' in sample:
             return 'logs'
         return None
     
@@ -154,8 +220,8 @@ class EnhancedTableFormatter:
                 enhanced['target_summary'] = self._route_target(item)
                 enhanced['scope_display'] = self._route_scope(item)
             elif data_type == 'logs':
-                enhanced['method_path'] = f"{item.get('method', 'GET')} {item.get('path', '/')}"
-                enhanced['response_time'] = item.get('response_time_ms', 0)
+                # All fields are already present, no special processing needed
+                pass
             elif data_type == 'oauth_clients':
                 # token_count is already provided by the API
                 pass
@@ -463,3 +529,142 @@ class EnhancedTableFormatter:
             if isinstance(value, (list, dict)) and value:
                 return False
         return True
+    
+    def _format_logs_multiline(self, logs: List[Dict], show_summary: bool = True, **kwargs) -> str:
+        """Format logs in a comprehensive multi-line format showing ALL fields.
+        
+        Args:
+            logs: List of log entries
+            **kwargs: Additional formatting options
+            
+        Returns:
+            Formatted multi-line log output
+        """
+        if not logs:
+            return "No logs found"
+        
+        output = []
+        # Only show header for summary view
+        if show_summary:
+            output.append("=" * 90)
+            output.append(f"System Logs (Last {kwargs.get('hours', 1)} hour)")
+            output.append("=" * 90)
+            output.append("")
+        
+        # Process each log entry
+        for log in logs:
+            # Parse status for color coding
+            status = log.get('status_code', 0)
+            if status >= 500:
+                status_marker = "[red]✗[/red]"
+            elif status >= 400:
+                status_marker = "[yellow]⚠[/yellow]"
+            elif status >= 300:
+                status_marker = "[blue]→[/blue]"
+            elif status >= 200:
+                status_marker = "[green]✓[/green]"
+            else:
+                status_marker = "[dim]○[/dim]"
+            
+            # Line 1: Timestamp, status, method, path, response time
+            timestamp = log.get('timestamp', 'N/A')
+            if timestamp != 'N/A':
+                # Format timestamp more readably
+                try:
+                    dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                    timestamp = dt.strftime('%Y-%m-%d %H:%M:%S')
+                except:
+                    pass
+            
+            method = log.get('method', 'N/A')
+            path = log.get('path', '/')
+            response_time = log.get('response_time_ms', 0)
+            
+            output.append(f"[{timestamp}] {status_marker} {status} {method} {path} ({response_time:.0f}ms)")
+            
+            # Line 2: Client and proxy info
+            client_ip = log.get('client_ip', 'unknown')
+            client_hostname = log.get('client_hostname', '')
+            proxy_hostname = log.get('proxy_hostname', 'unknown')
+            
+            if client_hostname and client_hostname != client_ip:
+                output.append(f"  Client: {client_ip} ({client_hostname}) → Proxy: {proxy_hostname}")
+            else:
+                output.append(f"  Client: {client_ip} → Proxy: {proxy_hostname}")
+            
+            # Line 3: User and auth info
+            user_id = log.get('user_id', '')
+            auth_type = log.get('auth_type', '')
+            if user_id or auth_type:
+                output.append(f"  User: {user_id or 'anonymous'} | Auth: {auth_type or 'none'}")
+            
+            # Line 4: Query parameters
+            query = log.get('query', '')
+            if query:
+                output.append(f"  Query: {query}")
+            
+            # Line 5: OAuth info
+            oauth_client = log.get('oauth_client_id', '')
+            oauth_user = log.get('oauth_username', '')
+            if oauth_client or oauth_user:
+                output.append(f"  OAuth: client={oauth_client or 'N/A'} user={oauth_user or 'N/A'}")
+            
+            # Line 6: User agent
+            user_agent = log.get('user_agent', '')
+            if user_agent:
+                # Truncate long user agents
+                if len(user_agent) > 80:
+                    user_agent = user_agent[:77] + "..."
+                output.append(f"  UA: {user_agent}")
+            
+            # Line 7: Referrer
+            referrer = log.get('referrer', '')
+            if referrer:
+                output.append(f"  Referrer: {referrer}")
+            
+            # Line 8: Bytes sent
+            bytes_sent = log.get('bytes_sent', 0)
+            if bytes_sent > 0:
+                output.append(f"  Bytes: {bytes_sent:,}")
+            
+            # Line 9: Error message
+            error = log.get('error', '')
+            if error:
+                output.append(f"  [red]ERROR: {error}[/red]")
+            
+            output.append("")  # Empty line between entries
+        
+        # Summary statistics (optional)
+        if show_summary:
+            # Add summary statistics
+            output.append("-" * 90)
+            output.append("Summary:")
+            
+            total = len(logs)
+            errors = sum(1 for log in logs if log.get('status_code', 0) >= 400)
+            avg_time = sum(log.get('response_time_ms', 0) for log in logs) / total if total > 0 else 0
+            
+            # Count unique values
+            unique_ips = len(set(log.get('client_ip', '') for log in logs if log.get('client_ip')))
+            unique_users = len(set(log.get('user_id', '') for log in logs if log.get('user_id')))
+            auth_types = {}
+            for log in logs:
+                auth = log.get('auth_type', 'none') or 'none'
+                auth_types[auth] = auth_types.get(auth, 0) + 1
+            output.append(f"- Total: {total} requests")
+            if errors > 0:
+                error_pct = (errors / total * 100) if total > 0 else 0
+                output.append(f"- Errors: {errors} ({error_pct:.1f}%)")
+            output.append(f"- Avg Time: {avg_time:.1f}ms")
+            output.append(f"- Unique IPs: {unique_ips}")
+            if unique_users > 0:
+                output.append(f"- Unique Users: {unique_users}")
+            if auth_types:
+                auth_str = ", ".join(f"{k}({v})" for k, v in auth_types.items())
+                output.append(f"- Auth Types: {auth_str}")
+            
+            output.append("-" * 90)
+        
+        # Return the lines as a single string for the caller to print
+        # Don't add ANSI codes here - let the caller's console handle formatting
+        return "\n".join(output)

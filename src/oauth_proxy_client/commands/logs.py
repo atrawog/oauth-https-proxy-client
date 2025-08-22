@@ -19,7 +19,7 @@ def log_group():
 
 @log_group.command('search')
 @click.option('--query', '-q', help='Search query')
-@click.option('--hours', type=int, default=24, help='Hours to look back')
+@click.option('--hours', type=int, default=1, help='Hours to look back')
 @click.option('--hostname', help='Filter by hostname')
 @click.option('--status', type=int, help='Filter by HTTP status code')
 @click.option('--limit', type=int, default=100, help='Maximum results')
@@ -47,13 +47,13 @@ def search_logs(ctx, query, hours, hostname, status, limit):
         ctx.handle_error(e)
 
 
-@log_group.command('by-ip')
-@click.argument('ip')
-@click.option('--hours', type=int, default=24, help='Hours to look back')
+@log_group.command('ip')
+@click.argument('client_ip')
+@click.option('--hours', type=int, default=1, help='Hours to look back')
 @click.option('--limit', type=int, default=100, help='Maximum results')
 @click.pass_obj
-def logs_by_ip(ctx, ip, hours, limit):
-    """Query logs by IP address."""
+def logs_by_ip(ctx, client_ip, hours, limit):
+    """Query logs by client IP address."""
     try:
         client = ctx.ensure_client()
         
@@ -62,18 +62,18 @@ def logs_by_ip(ctx, ip, hours, limit):
             'limit': limit,
         }
         
-        logs = client.get_sync(f'/logs/ip/{ip}', params)
-        ctx.output(logs, title=f"Logs from IP: {ip}", data_type='logs')
+        logs = client.get_sync(f'/logs/ip/{client_ip}', params)
+        ctx.output(logs, title=f"Logs from IP: {client_ip}", data_type='logs')
     except Exception as e:
         ctx.handle_error(e)
 
 
-@log_group.command('by-client')
+@log_group.command('oauth-client')
 @click.argument('client-id')
-@click.option('--hours', type=int, default=24, help='Hours to look back')
+@click.option('--hours', type=int, default=1, help='Hours to look back')
 @click.option('--limit', type=int, default=100, help='Maximum results')
 @click.pass_obj
-def logs_by_client(ctx, client_id, hours, limit):
+def logs_oauth_client(ctx, client_id, hours, limit):
     """Query logs by OAuth client ID."""
     try:
         client = ctx.ensure_client()
@@ -111,8 +111,8 @@ def show_errors(ctx, hours, include_warnings, limit):
         ctx.handle_error(e)
 
 
-@log_group.command('events')
-@click.option('--hours', type=int, default=24, help='Hours to look back')
+@log_group.command('stats')
+@click.option('--hours', type=int, default=1, help='Hours to look back')
 @click.pass_obj
 def event_stats(ctx, hours):
     """Show event statistics."""
@@ -158,7 +158,13 @@ def follow_logs(ctx, interval, hostname, status):
                 if status:
                     params['status'] = status
                 
-                logs = client.get_sync('/logs/search', params)
+                response = client.get_sync('/logs/search', params)
+                
+                # Extract logs from response
+                if isinstance(response, dict):
+                    logs = response.get('logs', [])
+                else:
+                    logs = response if isinstance(response, list) else []
                 
                 # Filter to only new logs
                 if last_timestamp and logs:
@@ -166,33 +172,28 @@ def follow_logs(ctx, interval, hostname, status):
                 else:
                     new_logs = logs
                 
-                # Display new logs
-                for log in new_logs:
-                    timestamp = log.get('timestamp', 'N/A')
-                    method = log.get('method', 'N/A')
-                    path = log.get('path', 'N/A')
-                    status_code = log.get('status', 'N/A')
-                    ip = log.get('ip', 'N/A')
-                    
-                    # Color code by status
-                    if isinstance(status_code, int):
-                        if status_code >= 500:
-                            status_color = 'red'
-                        elif status_code >= 400:
-                            status_color = 'yellow'
-                        elif status_code >= 300:
-                            status_color = 'blue'
-                        else:
-                            status_color = 'green'
-                    else:
-                        status_color = 'white'
-                    
-                    console.print(
-                        f"[dim]{timestamp}[/dim] "
-                        f"[{status_color}]{status_code}[/{status_color}] "
-                        f"{method} {path} "
-                        f"[dim]({ip})[/dim]"
+                # Filter out the follow command's own requests to /logs/search
+                # to avoid noise in the output
+                new_logs = [
+                    log for log in new_logs 
+                    if not (
+                        log.get('path') == '/logs/search' and 
+                        log.get('method') == 'GET' and
+                        'oauth-https-proxy-client' in log.get('user_agent', '')
                     )
+                ]
+                
+                # Display new logs using multi-line format
+                if new_logs:
+                    # Use the enhanced table formatter's multi-line format
+                    from ..formatters.enhanced_table import EnhancedTableFormatter
+                    formatter = EnhancedTableFormatter()
+                    
+                    # Format and display each log entry without summary
+                    for log in new_logs:
+                        # Format single log with multi-line format, no summary for follow mode
+                        formatted = formatter._format_logs_multiline([log], show_summary=False)
+                        console.print(formatted)
                 
                 # Update last timestamp
                 if logs:
@@ -206,13 +207,13 @@ def follow_logs(ctx, interval, hostname, status):
         ctx.handle_error(e)
 
 
-@log_group.command('by-host')
+@log_group.command('hostname')
 @click.argument('hostname')
-@click.option('--hours', type=int, default=24, help='Hours to look back')
+@click.option('--hours', type=int, default=1, help='Hours to look back')
 @click.option('--limit', type=int, default=100, help='Maximum results')
 @click.pass_obj
-def logs_by_host(ctx, hostname, hours, limit):
-    """Query logs by client FQDN (reverse DNS of client IP)."""
+def logs_by_hostname(ctx, hostname, hours, limit):
+    """Query logs by client hostname (reverse DNS of client IP)."""
     try:
         client = ctx.ensure_client()
         
@@ -227,9 +228,9 @@ def logs_by_host(ctx, hostname, hours, limit):
         ctx.handle_error(e)
 
 
-@log_group.command('by-proxy')
+@log_group.command('proxy')
 @click.argument('hostname')
-@click.option('--hours', type=int, default=24, help='Hours to look back')
+@click.option('--hours', type=int, default=1, help='Hours to look back')
 @click.option('--limit', type=int, default=100, help='Maximum results')
 @click.pass_obj
 def logs_by_proxy(ctx, hostname, hours, limit):
@@ -308,12 +309,12 @@ def log_stats(ctx, hours):
 
 
 @log_group.command('oauth')
-@click.argument('ip')
-@click.option('--hours', type=int, default=24, help='Hours to look back')
+@click.argument('client_ip')
+@click.option('--hours', type=int, default=1, help='Hours to look back')
 @click.option('--limit', type=int, default=100, help='Maximum results')
 @click.pass_obj
-def oauth_activity(ctx, ip, hours, limit):
-    """Show OAuth activity summary for an IP."""
+def oauth_activity(ctx, client_ip, hours, limit):
+    """Show OAuth activity summary for a client IP."""
     try:
         client = ctx.ensure_client()
         
@@ -322,11 +323,11 @@ def oauth_activity(ctx, ip, hours, limit):
             'limit': limit,
         }
         
-        activity = client.get_sync(f'/logs/oauth/{ip}', params)
+        activity = client.get_sync(f'/logs/oauth/{client_ip}', params)
         
         # Display OAuth activity summary
         if ctx.output_format == 'table' or ctx.output_format == 'auto':
-            console.print(f"\n[bold]OAuth Activity for IP: {ip}[/bold]")
+            console.print(f"\n[bold]OAuth Activity for IP: {client_ip}[/bold]")
             
             if 'summary' in activity:
                 summary = activity['summary']
@@ -353,18 +354,18 @@ def oauth_activity(ctx, ip, hours, limit):
                 
                 console.print(table)
         else:
-            ctx.output(activity, title=f"OAuth Activity: {ip}")
+            ctx.output(activity, title=f"OAuth Activity: {client_ip}")
     except Exception as e:
         ctx.handle_error(e)
 
 
 @log_group.command('oauth-debug')
-@click.argument('ip')
-@click.option('--hours', type=int, default=24, help='Hours to look back')
+@click.argument('client_ip')
+@click.option('--hours', type=int, default=1, help='Hours to look back')
 @click.option('--limit', type=int, default=100, help='Maximum results')
 @click.pass_obj
-def oauth_debug(ctx, ip, hours, limit):
-    """Full OAuth flow debugging for an IP."""
+def oauth_debug(ctx, client_ip, hours, limit):
+    """Full OAuth flow debugging for a client IP."""
     try:
         client = ctx.ensure_client()
         
@@ -373,11 +374,11 @@ def oauth_debug(ctx, ip, hours, limit):
             'limit': limit,
         }
         
-        debug_info = client.get_sync(f'/logs/oauth-debug/{ip}', params)
+        debug_info = client.get_sync(f'/logs/oauth-debug/{client_ip}', params)
         
         # Display detailed OAuth debugging information
         if ctx.output_format == 'table' or ctx.output_format == 'auto':
-            console.print(f"\n[bold]OAuth Debug Information for IP: {ip}[/bold]\n")
+            console.print(f"\n[bold]OAuth Debug Information for IP: {client_ip}[/bold]\n")
             
             # Show OAuth flows
             if 'flows' in debug_info and debug_info['flows']:
@@ -438,7 +439,7 @@ def oauth_debug(ctx, ip, hours, limit):
                 
                 console.print(table)
         else:
-            ctx.output(debug_info, title=f"OAuth Debug: {ip}")
+            ctx.output(debug_info, title=f"OAuth Debug: {client_ip}")
     except Exception as e:
         ctx.handle_error(e)
 
@@ -529,5 +530,154 @@ def test_logging(ctx):
             console.print("[red]✗ Logging system test failed[/red]")
             if result.get('error'):
                 console.print(f"  Error: {result['error']}")
+    except Exception as e:
+        ctx.handle_error(e)
+
+
+@log_group.command('user')
+@click.argument('user-id')
+@click.option('--hours', type=int, default=1, help='Hours to look back')
+@click.option('--limit', type=int, default=100, help='Maximum results')
+@click.pass_obj
+def logs_by_user(ctx, user_id, hours, limit):
+    """Query logs by authenticated user ID."""
+    try:
+        client = ctx.ensure_client()
+        
+        params = {
+            'hours': hours,
+            'limit': limit,
+        }
+        
+        logs = client.get_sync(f'/logs/user/{user_id}', params)
+        ctx.output(logs, title=f"Logs from User: {user_id}", data_type='logs')
+    except Exception as e:
+        ctx.handle_error(e)
+
+
+@log_group.command('session')
+@click.argument('session-id')
+@click.option('--hours', type=int, default=1, help='Hours to look back')
+@click.option('--limit', type=int, default=100, help='Maximum results')
+@click.pass_obj
+def logs_by_session(ctx, session_id, hours, limit):
+    """Query logs by session ID."""
+    try:
+        client = ctx.ensure_client()
+        
+        params = {
+            'hours': hours,
+            'limit': limit,
+        }
+        
+        logs = client.get_sync(f'/logs/session/{session_id}', params)
+        ctx.output(logs, title=f"Logs for Session: {session_id}", data_type='logs')
+    except Exception as e:
+        ctx.handle_error(e)
+
+
+@log_group.command('method')
+@click.argument('method')
+@click.option('--hours', type=int, default=1, help='Hours to look back')
+@click.option('--limit', type=int, default=100, help='Maximum results')
+@click.pass_obj
+def logs_by_method(ctx, method, hours, limit):
+    """Query logs by HTTP method."""
+    try:
+        client = ctx.ensure_client()
+        
+        params = {
+            'hours': hours,
+            'limit': limit,
+        }
+        
+        logs = client.get_sync(f'/logs/method/{method}', params)
+        ctx.output(logs, title=f"Logs for Method: {method}", data_type='logs')
+    except Exception as e:
+        ctx.handle_error(e)
+
+
+@log_group.command('status')
+@click.argument('code')
+@click.option('--hours', type=int, default=1, help='Hours to look back')
+@click.option('--limit', type=int, default=100, help='Maximum results')
+@click.pass_obj
+def logs_by_status(ctx, code, hours, limit):
+    """Query logs by status code."""
+    try:
+        client = ctx.ensure_client()
+        
+        params = {
+            'hours': hours,
+            'limit': limit,
+        }
+        
+        logs = client.get_sync(f'/logs/status/{code}', params)
+        ctx.output(logs, title=f"Logs with Status: {code}", data_type='logs')
+    except Exception as e:
+        ctx.handle_error(e)
+
+
+@log_group.command('slow')
+@click.option('--threshold', type=int, default=1000, help='Response time threshold in milliseconds')
+@click.option('--hours', type=int, default=1, help='Hours to look back')
+@click.option('--limit', type=int, default=50, help='Maximum results')
+@click.pass_obj
+def logs_slow_requests(ctx, threshold, hours, limit):
+    """Query slow requests above threshold."""
+    try:
+        client = ctx.ensure_client()
+        
+        params = {
+            'threshold_ms': threshold,
+            'hours': hours,
+            'limit': limit,
+        }
+        
+        logs = client.get_sync('/logs/slow', params)
+        ctx.output(logs, title=f"Slow Requests (>{threshold}ms)", data_type='logs')
+    except Exception as e:
+        ctx.handle_error(e)
+
+
+@log_group.command('path')
+@click.argument('pattern')
+@click.option('--hours', type=int, default=1, help='Hours to look back')
+@click.option('--limit', type=int, default=100, help='Maximum results')
+@click.pass_obj
+def logs_by_path(ctx, pattern, hours, limit):
+    """Query logs by path pattern."""
+    try:
+        client = ctx.ensure_client()
+        
+        params = {
+            'pattern': pattern,
+            'hours': hours,
+            'limit': limit,
+        }
+        
+        logs = client.get_sync('/logs/path', params)
+        ctx.output(logs, title=f"Logs matching path: {pattern}", data_type='logs')
+    except Exception as e:
+        ctx.handle_error(e)
+
+
+@log_group.command('oauth-user')
+@click.argument('username')
+@click.option('--hours', type=int, default=1, help='Hours to look back')
+@click.option('--limit', type=int, default=100, help='Maximum results')
+@click.pass_obj
+def logs_by_oauth_user(ctx, username, hours, limit):
+    """Query logs by OAuth username."""
+    try:
+        client = ctx.ensure_client()
+        
+        params = {
+            'hours': hours,
+            'limit': limit,
+        }
+        
+        logs = client.get_sync(f'/logs/oauth/user/{username}', params)
+        ctx.output(logs, title=f"Logs for OAuth User: {username}", data_type='logs')
     except Exception as e:
         ctx.handle_error(e)
