@@ -193,7 +193,8 @@ def follow_logs(ctx, interval, hostname, status):
                     for log in new_logs:
                         # Format single log with multi-line format, no summary for follow mode
                         formatted = formatter._format_logs_multiline([log], show_summary=False)
-                        console.print(formatted)
+                        # Use print() directly since formatted already contains ANSI codes
+                        print(formatted, end='')
                 
                 # Update last timestamp
                 if logs:

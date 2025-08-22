@@ -1,7 +1,7 @@
 """Enhanced table formatter with context-aware formatting."""
 
 from typing import Any, Dict, List, Optional, Union
-from datetime import datetime
+from datetime import datetime, timezone
 from io import StringIO
 from rich.console import Console
 from rich.table import Table
@@ -530,7 +530,7 @@ class EnhancedTableFormatter:
                 return False
         return True
     
-    def _format_logs_multiline(self, logs: List[Dict], show_summary: bool = True, **kwargs) -> str:
+    def _format_logs_multiline(self, logs: List[Dict], show_summary: bool = False, **kwargs) -> str:
         """Format logs in a comprehensive multi-line format showing ALL fields.
         
         Args:
@@ -608,11 +608,17 @@ class EnhancedTableFormatter:
                 # Use Unix timestamp if available for more readable format
                 unix_time = log.get('timestamp_unix')
                 if unix_time:
-                    timestamp = f"{unix_time}"
+                    # Convert Unix milliseconds timestamp to ISO format
+                    try:
+                        dt = datetime.fromtimestamp(unix_time / 1000, tz=timezone.utc)
+                        timestamp = dt.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3] + 'Z'
+                    except Exception as e:
+                        # Fallback to raw unix timestamp
+                        timestamp = f"{unix_time}"
                 else:
                     try:
                         dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
-                        timestamp = dt.strftime('%Y-%m-%d %H:%M:%S')
+                        timestamp = dt.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3] + 'Z'
                     except:
                         pass
             
