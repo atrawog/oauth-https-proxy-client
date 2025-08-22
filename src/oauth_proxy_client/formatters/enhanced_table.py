@@ -538,107 +538,195 @@ class EnhancedTableFormatter:
             **kwargs: Additional formatting options
             
         Returns:
-            Formatted multi-line log output
+            Formatted multi-line log output with Rich formatting
         """
+        from rich.text import Text
+        from rich.console import Console
+        import os
+        import json
+        
         if not logs:
             return "No logs found"
         
-        output = []
+        # Check if we're in DEBUG mode
+        is_debug = os.environ.get('LOG_LEVEL', 'INFO') == 'DEBUG'
+        
+        console = Console()
+        output = Text()
+        
         # Only show header for summary view
         if show_summary:
-            output.append("=" * 90)
-            output.append(f"System Logs (Last {kwargs.get('hours', 1)} hour)")
-            output.append("=" * 90)
-            output.append("")
+            output.append("=" * 90 + "\n", style="bold cyan")
+            output.append(f"System Logs (Last {kwargs.get('hours', 1)} hour)\n", style="bold white")
+            output.append("=" * 90 + "\n\n", style="bold cyan")
         
         # Process each log entry
         for log in logs:
             # Parse status for color coding
             status = log.get('status_code', 0)
             if status >= 500:
-                status_marker = "[red]✗[/red]"
+                status_marker = "✗"
+                status_color = "red"
             elif status >= 400:
-                status_marker = "[yellow]⚠[/yellow]"
+                status_marker = "⚠"
+                status_color = "yellow"
             elif status >= 300:
-                status_marker = "[blue]→[/blue]"
+                status_marker = "→"
+                status_color = "blue"
             elif status >= 200:
-                status_marker = "[green]✓[/green]"
+                status_marker = "✓"
+                status_color = "green"
             else:
-                status_marker = "[dim]○[/dim]"
+                status_marker = "○"
+                status_color = "dim"
             
             # Line 1: Timestamp, status, method, path, response time
             timestamp = log.get('timestamp', 'N/A')
             if timestamp != 'N/A':
-                # Format timestamp more readably
-                try:
-                    dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
-                    timestamp = dt.strftime('%Y-%m-%d %H:%M:%S')
-                except:
-                    pass
+                # Use Unix timestamp if available for more readable format
+                unix_time = log.get('timestamp_unix')
+                if unix_time:
+                    timestamp = f"{unix_time}"
+                else:
+                    try:
+                        dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                        timestamp = dt.strftime('%Y-%m-%d %H:%M:%S')
+                    except:
+                        pass
             
-            method = log.get('method', 'N/A')
+            method = log.get('method', '')
             path = log.get('path', '/')
             response_time = log.get('response_time_ms', 0)
             
-            output.append(f"[{timestamp}] {status_marker} {status} {method} {path} ({response_time:.0f}ms)")
+            # Main log line with proper coloring
+            output.append(f"[{timestamp}] ", style="dim")
+            output.append(f"{status_marker} ", style=status_color)
+            output.append(f"{status} ", style=status_color if status else "dim")
+            if method:
+                output.append(f"{method} {path} ", style="cyan")
+            output.append(f"({response_time:.0f}ms)\n", style="dim")
             
             # Line 2: Client and proxy info
-            client_ip = log.get('client_ip', 'unknown')
+            client_ip = log.get('client_ip', '')
             client_hostname = log.get('client_hostname', '')
-            proxy_hostname = log.get('proxy_hostname', 'unknown')
+            proxy_hostname = log.get('proxy_hostname', '')
             
-            if client_hostname and client_hostname != client_ip:
-                output.append(f"  Client: {client_ip} ({client_hostname}) → Proxy: {proxy_hostname}")
-            else:
-                output.append(f"  Client: {client_ip} → Proxy: {proxy_hostname}")
+            if client_ip or proxy_hostname:
+                output.append("  Client: ", style="dim")
+                if client_hostname and client_hostname != client_ip:
+                    output.append(f"{client_ip} ({client_hostname})", style="white")
+                else:
+                    output.append(f"{client_ip or 'unknown'}", style="white")
+                output.append(" → Proxy: ", style="dim")
+                output.append(f"{proxy_hostname or 'unknown'}\n", style="white")
             
             # Line 3: User and auth info
             user_id = log.get('user_id', '')
             auth_type = log.get('auth_type', '')
             if user_id or auth_type:
-                output.append(f"  User: {user_id or 'anonymous'} | Auth: {auth_type or 'none'}")
+                output.append("  User: ", style="dim")
+                output.append(f"{user_id or 'anonymous'}", style="cyan")
+                output.append(" | Auth: ", style="dim")
+                output.append(f"{auth_type or 'none'}\n", style="yellow")
             
             # Line 4: Query parameters
             query = log.get('query', '')
             if query:
-                output.append(f"  Query: {query}")
+                output.append("  Query: ", style="dim")
+                output.append(f"{query}\n", style="white")
             
             # Line 5: OAuth info
             oauth_client = log.get('oauth_client_id', '')
             oauth_user = log.get('oauth_username', '')
             if oauth_client or oauth_user:
-                output.append(f"  OAuth: client={oauth_client or 'N/A'} user={oauth_user or 'N/A'}")
+                output.append("  OAuth: client=", style="dim")
+                output.append(f"{oauth_client or 'N/A'}", style="cyan")
+                output.append(" user=", style="dim")
+                output.append(f"{oauth_user or 'N/A'}\n", style="cyan")
             
             # Line 6: User agent
             user_agent = log.get('user_agent', '')
             if user_agent:
-                # Truncate long user agents
-                if len(user_agent) > 80:
+                # Truncate long user agents unless in debug mode
+                if not is_debug and len(user_agent) > 80:
                     user_agent = user_agent[:77] + "..."
-                output.append(f"  UA: {user_agent}")
+                output.append("  UA: ", style="dim")
+                output.append(f"{user_agent}\n", style="white")
             
             # Line 7: Referrer
-            referrer = log.get('referrer', '')
-            if referrer:
-                output.append(f"  Referrer: {referrer}")
+            referer = log.get('referer', '') or log.get('referrer', '')
+            if referer:
+                output.append("  Referer: ", style="dim")
+                output.append(f"{referer}\n", style="white")
             
             # Line 8: Bytes sent
             bytes_sent = log.get('bytes_sent', 0)
             if bytes_sent > 0:
-                output.append(f"  Bytes: {bytes_sent:,}")
+                output.append("  Bytes: ", style="dim")
+                output.append(f"{bytes_sent:,}\n", style="white")
+            
+            # DEBUG MODE: Show additional fields
+            if is_debug:
+                # Request headers
+                headers = log.get('headers')
+                if headers:
+                    output.append("  [DEBUG] Headers:\n", style="magenta")
+                    try:
+                        headers_dict = json.loads(headers) if isinstance(headers, str) else headers
+                        for key, value in headers_dict.items():
+                            output.append(f"    {key}: ", style="dim magenta")
+                            output.append(f"{value}\n", style="magenta")
+                    except:
+                        output.append(f"    {headers}\n", style="magenta")
+                
+                # Request body
+                body = log.get('body')
+                if body:
+                    output.append("  [DEBUG] Body:\n", style="magenta")
+                    # Truncate very long bodies
+                    if len(str(body)) > 500:
+                        body = str(body)[:500] + "... (truncated)"
+                    output.append(f"    {body}\n", style="magenta")
+                
+                # Backend URL for proxy requests
+                backend_url = log.get('backend_url')
+                if backend_url:
+                    output.append("  [DEBUG] Backend: ", style="magenta")
+                    output.append(f"{backend_url}\n", style="magenta")
+                
+                # Session ID
+                session_id = log.get('session_id')
+                if session_id:
+                    output.append("  [DEBUG] Session: ", style="magenta")
+                    output.append(f"{session_id}\n", style="magenta")
+                
+                # Trace ID
+                trace_id = log.get('trace_id')
+                if trace_id:
+                    output.append("  [DEBUG] Trace: ", style="magenta")
+                    output.append(f"{trace_id}\n", style="magenta")
+                
+                # Any other debug fields
+                debug_fields = ['event_type', 'level', 'component', 'worker_id']
+                for field in debug_fields:
+                    value = log.get(field)
+                    if value:
+                        output.append(f"  [DEBUG] {field}: ", style="magenta")
+                        output.append(f"{value}\n", style="magenta")
             
             # Line 9: Error message
             error = log.get('error', '')
             if error:
-                output.append(f"  [red]ERROR: {error}[/red]")
+                output.append("  ERROR: ", style="bold red")
+                output.append(f"{error}\n", style="red")
             
-            output.append("")  # Empty line between entries
+            output.append("\n")  # Empty line between entries
         
         # Summary statistics (optional)
-        if show_summary:
+        if show_summary and logs:
             # Add summary statistics
-            output.append("-" * 90)
-            output.append("Summary:")
+            output.append("-" * 90 + "\n", style="dim")
+            output.append("Summary:\n", style="bold")
             
             total = len(logs)
             errors = sum(1 for log in logs if log.get('status_code', 0) >= 400)
@@ -651,20 +739,21 @@ class EnhancedTableFormatter:
             for log in logs:
                 auth = log.get('auth_type', 'none') or 'none'
                 auth_types[auth] = auth_types.get(auth, 0) + 1
-            output.append(f"- Total: {total} requests")
+            output.append(f"- Total: {total} requests\n", style="white")
             if errors > 0:
                 error_pct = (errors / total * 100) if total > 0 else 0
-                output.append(f"- Errors: {errors} ({error_pct:.1f}%)")
-            output.append(f"- Avg Time: {avg_time:.1f}ms")
-            output.append(f"- Unique IPs: {unique_ips}")
+                output.append(f"- Errors: {errors} ({error_pct:.1f}%)\n", style="white")
+            output.append(f"- Avg Time: {avg_time:.1f}ms\n", style="white")
+            output.append(f"- Unique IPs: {unique_ips}\n", style="white")
             if unique_users > 0:
-                output.append(f"- Unique Users: {unique_users}")
+                output.append(f"- Unique Users: {unique_users}\n", style="white")
             if auth_types:
                 auth_str = ", ".join(f"{k}({v})" for k, v in auth_types.items())
-                output.append(f"- Auth Types: {auth_str}")
+                output.append(f"- Auth Types: {auth_str}\n", style="white")
             
-            output.append("-" * 90)
+            output.append("-" * 90, style="dim")
         
-        # Return the lines as a single string for the caller to print
-        # Don't add ANSI codes here - let the caller's console handle formatting
-        return "\n".join(output)
+        # Convert Rich Text to string with ANSI codes for terminal display
+        with console.capture() as capture:
+            console.print(output)
+        return capture.get()
