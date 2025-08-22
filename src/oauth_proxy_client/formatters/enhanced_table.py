@@ -562,25 +562,47 @@ class EnhancedTableFormatter:
         
         # Process each log entry
         for log in logs:
-            # Parse status for color coding
-            status = log.get('status_code', 0)
-            if status >= 500:
-                status_marker = "✗"
-                status_color = "red"
-            elif status >= 400:
-                status_marker = "⚠"
-                status_color = "yellow"
-            elif status >= 300:
-                status_marker = "→"
-                status_color = "blue"
-            elif status >= 200:
-                status_marker = "✓"
-                status_color = "green"
-            else:
-                status_marker = "○"
-                status_color = "dim"
+            # Determine if this is an HTTP request or a system event
+            is_http_request = (log.get('method') or log.get('path') or 
+                              log.get('status_code', 0) > 0 or 
+                              log.get('log_type') == 'http_request' or 
+                              log.get('log_type') == 'http_response')
             
-            # Line 1: Timestamp, status, method, path, response time
+            # Parse status for color coding (for HTTP requests)
+            status = log.get('status_code', 0)
+            if is_http_request:
+                if status >= 500:
+                    status_marker = "✗"
+                    status_color = "red"
+                elif status >= 400:
+                    status_marker = "⚠"
+                    status_color = "yellow"
+                elif status >= 300:
+                    status_marker = "→"
+                    status_color = "blue"
+                elif status >= 200:
+                    status_marker = "✓"
+                    status_color = "green"
+                else:
+                    status_marker = "○"
+                    status_color = "dim"
+            else:
+                # For system events, use log level for color coding
+                level = log.get('level', 'INFO')
+                if level == 'ERROR' or level == 'CRITICAL':
+                    status_marker = "✗"
+                    status_color = "red"
+                elif level == 'WARNING':
+                    status_marker = "⚠"
+                    status_color = "yellow"
+                elif level == 'DEBUG':
+                    status_marker = "◆"
+                    status_color = "magenta"
+                else:  # INFO
+                    status_marker = "●"
+                    status_color = "cyan"
+            
+            # Line 1: Timestamp and main info
             timestamp = log.get('timestamp', 'N/A')
             if timestamp != 'N/A':
                 # Use Unix timestamp if available for more readable format
@@ -594,40 +616,71 @@ class EnhancedTableFormatter:
                     except:
                         pass
             
-            method = log.get('method', '')
-            path = log.get('path', '/')
-            response_time = log.get('response_time_ms', 0)
-            
-            # Main log line with proper coloring
+            # Format the main line based on log type
             output.append(f"[{timestamp}] ", style="dim")
             output.append(f"{status_marker} ", style=status_color)
-            output.append(f"{status} ", style=status_color if status else "dim")
-            if method:
-                output.append(f"{method} {path} ", style="cyan")
-            output.append(f"({response_time:.0f}ms)\n", style="dim")
             
-            # Line 2: Client and proxy info
-            client_ip = log.get('client_ip', '')
-            client_hostname = log.get('client_hostname', '')
-            proxy_hostname = log.get('proxy_hostname', '')
-            
-            if client_ip or proxy_hostname:
-                output.append("  Client: ", style="dim")
-                if client_hostname and client_hostname != client_ip:
-                    output.append(f"{client_ip} ({client_hostname})", style="white")
+            if is_http_request:
+                # HTTP request format
+                method = log.get('method', '')
+                path = log.get('path', '/')
+                response_time = log.get('response_time_ms', 0)
+                
+                output.append(f"{status} ", style=status_color if status else "dim")
+                if method:
+                    output.append(f"{method} {path} ", style="cyan")
+                output.append(f"({response_time:.0f}ms)\n", style="dim")
+            else:
+                # System event format
+                level = log.get('level', 'INFO')
+                component = log.get('component', 'system')
+                message = log.get('message', '')
+                
+                output.append(f"[{level}] ", style=status_color)
+                output.append(f"[{component}] ", style="blue")
+                if message:
+                    # Truncate very long messages unless in debug mode
+                    if not is_debug and len(message) > 100:
+                        message = message[:97] + "..."
+                    output.append(f"{message}\n", style="white")
                 else:
-                    output.append(f"{client_ip or 'unknown'}", style="white")
-                output.append(" → Proxy: ", style="dim")
-                output.append(f"{proxy_hostname or 'unknown'}\n", style="white")
+                    output.append("\n")
             
-            # Line 3: User and auth info
+            # Line 2: Client and proxy info (for HTTP requests)
+            if is_http_request:
+                client_ip = log.get('client_ip', '')
+                client_hostname = log.get('client_hostname', '')
+                proxy_hostname = log.get('proxy_hostname', '')
+                client_id = log.get('client_id', log.get('trace_id', ''))  # Use trace_id as fallback
+                
+                if client_ip or proxy_hostname:
+                    # Show client_id in compact format
+                    if client_id:
+                        # Show last 8 chars for readability
+                        short_id = client_id[-8:] if len(client_id) > 8 else client_id
+                        output.append(f"  [{short_id}] ", style="dim cyan")
+                    else:
+                        output.append("  ", style="dim")
+                    
+                    output.append("Client: ", style="dim")
+                    if client_hostname and client_hostname != client_ip:
+                        output.append(f"{client_ip} ({client_hostname})", style="white")
+                    else:
+                        output.append(f"{client_ip or 'unknown'}", style="white")
+                    output.append(" → Proxy: ", style="dim")
+                    output.append(f"{proxy_hostname or 'unknown'}\n", style="white")
+            
+            # Line 3: User and auth info (show for all types if present)
             user_id = log.get('user_id', '')
             auth_type = log.get('auth_type', '')
-            if user_id or auth_type:
+            if (user_id and user_id != 'anonymous') or auth_type:
                 output.append("  User: ", style="dim")
                 output.append(f"{user_id or 'anonymous'}", style="cyan")
-                output.append(" | Auth: ", style="dim")
-                output.append(f"{auth_type or 'none'}\n", style="yellow")
+                if auth_type:
+                    output.append(" | Auth: ", style="dim")
+                    output.append(f"{auth_type}\n", style="yellow")
+                else:
+                    output.append("\n")
             
             # Line 4: Query parameters
             query = log.get('query', '')
@@ -644,14 +697,15 @@ class EnhancedTableFormatter:
                 output.append(" user=", style="dim")
                 output.append(f"{oauth_user or 'N/A'}\n", style="cyan")
             
-            # Line 6: User agent
-            user_agent = log.get('user_agent', '')
-            if user_agent:
-                # Truncate long user agents unless in debug mode
-                if not is_debug and len(user_agent) > 80:
-                    user_agent = user_agent[:77] + "..."
-                output.append("  UA: ", style="dim")
-                output.append(f"{user_agent}\n", style="white")
+            # Line 6: User agent (only for HTTP requests)
+            if is_http_request:
+                user_agent = log.get('user_agent', '')
+                if user_agent:
+                    # Truncate long user agents unless in debug mode
+                    if not is_debug and len(user_agent) > 80:
+                        user_agent = user_agent[:77] + "..."
+                    output.append("  UA: ", style="dim")
+                    output.append(f"{user_agent}\n", style="white")
             
             # Line 7: Referrer
             referer = log.get('referer', '') or log.get('referrer', '')
@@ -659,34 +713,40 @@ class EnhancedTableFormatter:
                 output.append("  Referer: ", style="dim")
                 output.append(f"{referer}\n", style="white")
             
-            # Line 8: Bytes sent
-            bytes_sent = log.get('bytes_sent', 0)
-            if bytes_sent > 0:
-                output.append("  Bytes: ", style="dim")
-                output.append(f"{bytes_sent:,}\n", style="white")
+            # Line 8: Bytes sent (only for HTTP requests)
+            if is_http_request:
+                bytes_sent = log.get('bytes_sent', 0)
+                if bytes_sent > 0:
+                    output.append("  Bytes: ", style="dim")
+                    output.append(f"{bytes_sent:,}\n", style="white")
             
             # DEBUG MODE: Show additional fields
             if is_debug:
-                # Request headers
-                headers = log.get('headers')
-                if headers:
-                    output.append("  [DEBUG] Headers:\n", style="magenta")
-                    try:
-                        headers_dict = json.loads(headers) if isinstance(headers, str) else headers
-                        for key, value in headers_dict.items():
-                            output.append(f"    {key}: ", style="dim magenta")
-                            output.append(f"{value}\n", style="magenta")
-                    except:
-                        output.append(f"    {headers}\n", style="magenta")
-                
-                # Request body
-                body = log.get('body')
-                if body:
-                    output.append("  [DEBUG] Body:\n", style="magenta")
-                    # Truncate very long bodies
-                    if len(str(body)) > 500:
-                        body = str(body)[:500] + "... (truncated)"
-                    output.append(f"    {body}\n", style="magenta")
+                # Request headers (only for HTTP requests)
+                if is_http_request:
+                    headers = log.get('headers')
+                    if headers:
+                        output.append("  [DEBUG] Headers:\n", style="magenta")
+                        try:
+                            headers_dict = json.loads(headers) if isinstance(headers, str) else headers
+                            for key, value in headers_dict.items():
+                                # Mask sensitive headers
+                                if key.lower() in ['authorization', 'cookie', 'x-api-key']:
+                                    if len(str(value)) > 10:
+                                        value = value[:10] + "***MASKED***"
+                                output.append(f"    {key}: ", style="dim magenta")
+                                output.append(f"{value}\n", style="magenta")
+                        except:
+                            output.append(f"    {headers}\n", style="magenta")
+                    
+                    # Request body (only for HTTP requests)
+                    body = log.get('body')
+                    if body:
+                        output.append("  [DEBUG] Body:\n", style="magenta")
+                        # Truncate very long bodies
+                        if len(str(body)) > 500:
+                            body = str(body)[:500] + "... (truncated)"
+                        output.append(f"    {body}\n", style="magenta")
                 
                 # Backend URL for proxy requests
                 backend_url = log.get('backend_url')
@@ -706,12 +766,24 @@ class EnhancedTableFormatter:
                     output.append("  [DEBUG] Trace: ", style="magenta")
                     output.append(f"{trace_id}\n", style="magenta")
                 
-                # Any other debug fields
-                debug_fields = ['event_type', 'level', 'component', 'worker_id']
+                # Additional debug fields based on log type
+                if is_http_request:
+                    # HTTP-specific debug fields
+                    debug_fields = ['worker_id']
+                else:
+                    # System event debug fields
+                    debug_fields = ['event_type', 'context', 'data']
+                
                 for field in debug_fields:
                     value = log.get(field)
                     if value:
                         output.append(f"  [DEBUG] {field}: ", style="magenta")
+                        # Format complex values
+                        if isinstance(value, (dict, list)):
+                            try:
+                                value = json.dumps(value, indent=2)
+                            except:
+                                value = str(value)
                         output.append(f"{value}\n", style="magenta")
             
             # Line 9: Error message
