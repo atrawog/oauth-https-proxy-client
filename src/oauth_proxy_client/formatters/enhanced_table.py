@@ -634,7 +634,11 @@ class EnhancedTableFormatter:
                 
                 output.append(f"{status} ", style=status_color if status else "dim")
                 if method:
-                    output.append(f"{method} {path} ", style="cyan")
+                    # Only show path if it's not empty
+                    if path and path.strip():
+                        output.append(f"{method} {path} ", style="cyan")
+                    else:
+                        output.append(f"{method} ", style="cyan")
                 output.append(f"({response_time:.0f}ms)\n", style="dim")
             else:
                 # System event format
