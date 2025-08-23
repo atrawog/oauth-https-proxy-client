@@ -28,7 +28,7 @@ class EnhancedTableFormatter:
             'box': ROUNDED,
         },
         'proxies': {
-            'columns': ['hostname', 'target_url', 'status_summary', 'auth_enabled', 'cert_name'],
+            'columns': ['proxy_hostname', 'target_url', 'status_summary', 'auth_enabled', 'cert_name'],
             'headers': ['Hostname', 'Target', 'Status', 'Auth', 'Certificate'],
             'styles': ['bold cyan', 'blue', 'status', 'bool', 'yellow'],
             'box': ROUNDED,
@@ -186,7 +186,7 @@ class EnhancedTableFormatter:
             return 'tokens'
         elif 'cert_name' in sample or 'fullchain_pem' in sample:
             return 'certificates'
-        elif 'hostname' in sample and 'target_url' in sample:
+        elif 'proxy_hostname' in sample and 'target_url' in sample:
             return 'proxies'
         elif 'service_name' in sample or 'image' in sample:
             return 'services'

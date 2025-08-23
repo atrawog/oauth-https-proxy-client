@@ -41,7 +41,7 @@ def create_proxy(ctx, hostname, target_url, cert_name, email, staging, preserve_
         client = ctx.ensure_client()
         
         data = {
-            'hostname': hostname,
+            'proxy_hostname': hostname,
             'target_url': target_url,
             'preserve_host_header': preserve_host,
             'enable_http': enable_http,
@@ -68,7 +68,7 @@ def create_proxy(ctx, hostname, target_url, cert_name, email, staging, preserve_
         cert_status = result.get('certificate_status', '')
         
         console.print(f"[green]✓ Proxy created successfully![/green]")
-        console.print(f"  Hostname: {proxy_target.get('hostname')}")
+        console.print(f"  Hostname: {proxy_target.get('proxy_hostname')}")
         console.print(f"  Target URL: {proxy_target.get('target_url')}")
         
         if proxy_target.get('enable_https'):
@@ -78,12 +78,12 @@ def create_proxy(ctx, hostname, target_url, cert_name, email, staging, preserve_
                 console.print(f"  Certificate: {proxy_target.get('cert_name')} [yellow](generating...)[/yellow]")
             elif cert_status == 'https_disabled_no_cert':
                 console.print(f"  [yellow]⚠ HTTPS requested but no certificate available[/yellow]")
-                console.print(f"    Create one with: just cert-create {proxy_target.get('cert_name')} {hostname}")
+                console.print(f"    Create one with: just cert-create {proxy_target.get('cert_name')} {proxy_target.get('proxy_hostname')}")
         
         if proxy_target.get('enable_https') and proxy_target.get('cert_name'):
-            console.print(f"\nTest with: curl https://{hostname}")
+            console.print(f"\nTest with: curl https://{proxy_target.get('proxy_hostname')}")
         elif proxy_target.get('enable_http'):
-            console.print(f"\nTest with: curl http://{hostname}")
+            console.print(f"\nTest with: curl http://{proxy_target.get('proxy_hostname')}")
             
     except Exception as e:
         ctx.handle_error(e)
