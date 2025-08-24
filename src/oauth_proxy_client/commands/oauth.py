@@ -115,7 +115,7 @@ def oauth_login(ctx, domain, no_browser, force):
                 display_token_info(
                     manager.access_token, 
                     manager.refresh_token, 
-                    manager.scope,
+                    None,  # Scope will be extracted from token
                     title="Current OAuth Token (Already Valid)"
                 )
                 console.print("\n[dim]Use --force flag to get a new token anyway[/dim]")
@@ -138,7 +138,7 @@ def oauth_login(ctx, domain, no_browser, force):
                     display_token_info(
                         manager.access_token,
                         manager.refresh_token,
-                        manager.scope,
+                        None,  # Scope will be extracted from token
                         title="Refreshed OAuth Token"
                     )
                     console.print("\n[green]Token automatically saved to .env[/green]")
@@ -208,9 +208,15 @@ def oauth_status(ctx, quiet, detailed):
                         table.add_column("Field", style="bright_blue", width=20)
                         table.add_column("Value", style="white")
                         
-                        # Add status
-                        remaining = int((manager.expires_at - time.time()) / 60) if manager.expires_at else 0
-                        table.add_row("Status", f"[green]✓ Valid ({remaining} min remaining)[/green]")
+                        # Add status by checking token expiry from claims
+                        if 'exp' in claims:
+                            remaining = int((claims['exp'] - time.time()) / 60)
+                            if remaining > 0:
+                                table.add_row("Status", f"[green]✓ Valid ({remaining} min remaining)[/green]")
+                            else:
+                                table.add_row("Status", "[red]✗ Expired[/red]")
+                        else:
+                            table.add_row("Status", "[yellow]⚠ Unknown expiry[/yellow]")
                         
                         # Add user information
                         if 'username' in claims:
@@ -222,8 +228,8 @@ def oauth_status(ctx, quiet, detailed):
                         if 'name' in claims:
                             table.add_row("Name", claims['name'])
                         
-                        # Add scope
-                        table.add_row("Scope", manager.scope or claims.get('scope', 'N/A'))
+                        # Add scope from token claims
+                        table.add_row("Scope", claims.get('scope', 'N/A'))
                         
                         # Add audience
                         if 'aud' in claims:
@@ -247,8 +253,8 @@ def oauth_status(ctx, quiet, detailed):
                             iat_time = datetime.fromtimestamp(claims['iat'])
                             table.add_row("Issued At", iat_time.isoformat())
                         
-                        if manager.expires_at:
-                            exp_time = datetime.fromtimestamp(manager.expires_at)
+                        if 'exp' in claims:
+                            exp_time = datetime.fromtimestamp(claims['exp'])
                             table.add_row("Expires At", exp_time.isoformat())
                         
                         # Add refresh token status
@@ -265,17 +271,31 @@ def oauth_status(ctx, quiet, detailed):
                     except Exception as e:
                         # Fallback to simple display
                         console.print(f"[yellow]Could not decode token details: {e}[/yellow]")
-                        remaining = int((manager.expires_at - time.time()) / 60) if manager.expires_at else 0
-                        console.print(f"[green]✓ Token valid for {remaining} minutes[/green]")
-                        if manager.scope:
-                            console.print(f"Scopes: {manager.scope}")
+                        # Try to get expiry from token
+                        try:
+                            token_claims = jwt.decode(manager.access_token, options={"verify_signature": False})
+                            if 'exp' in token_claims:
+                                remaining = int((token_claims['exp'] - time.time()) / 60)
+                                console.print(f"[green]✓ Token valid for {remaining} minutes[/green]")
+                            if 'scope' in token_claims:
+                                console.print(f"Scopes: {token_claims['scope']}")
+                        except:
+                            console.print("[yellow]Could not determine token validity[/yellow]")
                 else:
-                    # Simple display (default)
-                    remaining = int((manager.expires_at - time.time()) / 60) if manager.expires_at else 0
-                    console.print(f"[green]✓ Token valid for {remaining} minutes[/green]")
-                    
-                    if manager.scope:
-                        console.print(f"Scopes: {manager.scope}")
+                    # Simple display (default) - extract from token
+                    try:
+                        token_claims = jwt.decode(manager.access_token, options={"verify_signature": False})
+                        if 'exp' in token_claims:
+                            remaining = int((token_claims['exp'] - time.time()) / 60)
+                            if remaining > 0:
+                                console.print(f"[green]✓ Token valid for {remaining} minutes[/green]")
+                            else:
+                                console.print("[red]✗ Token expired[/red]")
+                        
+                        if 'scope' in token_claims:
+                            console.print(f"Scopes: {token_claims['scope']}")
+                    except:
+                        console.print("[yellow]Could not decode token[/yellow]")
                     
                     if manager.refresh_token:
                         console.print("[green]✓ Refresh token available[/green]")
@@ -294,6 +314,65 @@ def oauth_status(ctx, quiet, detailed):
         if not quiet:
             ctx.handle_error(e)
         sys.exit(1)
+
+
+@oauth_group.command('logout')
+@click.option('--quiet', is_flag=True, help='Quiet mode for scripting')
+@click.pass_obj
+def oauth_logout(ctx, quiet):
+    """Clear OAuth tokens from .env file."""
+    try:
+        import os
+        from pathlib import Path
+        
+        # Find .env file
+        env_path = Path.cwd() / '.env'
+        if not env_path.exists():
+            if not quiet:
+                console.print("[yellow]No .env file found[/yellow]")
+            return
+        
+        # Read existing .env file
+        with open(env_path, 'r') as f:
+            lines = f.readlines()
+        
+        # Clear OAuth-related variables
+        oauth_vars = {
+            'OAUTH_ACCESS_TOKEN',
+            'OAUTH_REFRESH_TOKEN'
+        }
+        # Deprecated vars to remove entirely
+        deprecated_vars = {
+            'OAUTH_TOKEN_EXPIRES_AT',
+            'OAUTH_TOKEN_SCOPE'
+        }
+        
+        new_lines = []
+        for line in lines:
+            # Check if this line sets an OAuth variable
+            if '=' in line:
+                var_name = line.split('=')[0].strip()
+                if var_name in oauth_vars:
+                    # Clear the value but keep the variable
+                    new_lines.append(f"{var_name}=\n")
+                elif var_name in deprecated_vars:
+                    # Skip deprecated variables entirely
+                    continue
+                else:
+                    new_lines.append(line)
+            else:
+                new_lines.append(line)
+        
+        # Write back to .env
+        with open(env_path, 'w') as f:
+            f.writelines(new_lines)
+        
+        if not quiet:
+            console.print("[green]✓ OAuth tokens cleared from .env[/green]")
+            console.print("[dim]Run 'proxy-client oauth login' to authenticate again[/dim]")
+    except Exception as e:
+        if not quiet:
+            ctx.handle_error(e)
 
 
 @oauth_group.command('refresh')
@@ -333,12 +412,20 @@ def oauth_refresh(ctx, quiet, detailed):
                     display_token_info(
                         manager.access_token,
                         manager.refresh_token,
-                        manager.scope,
+                        None,  # Scope will be extracted from token
                         title="Refreshed OAuth Token"
                     )
                 else:
-                    remaining = int((manager.expires_at - time.time()) / 60) if manager.expires_at else 30
-                    console.print(f"Token valid for: {remaining} minutes")
+                    # Extract expiry from refreshed token
+                    try:
+                        token_claims = jwt.decode(manager.access_token, options={"verify_signature": False})
+                        if 'exp' in token_claims:
+                            remaining = int((token_claims['exp'] - time.time()) / 60)
+                            console.print(f"Token valid for: {remaining} minutes")
+                        else:
+                            console.print("Token refreshed successfully")
+                    except:
+                        console.print("Token refreshed successfully")
                 
                 console.print("\n[green]Token automatically saved to .env[/green]")
             sys.exit(0)

@@ -92,7 +92,7 @@ class Context:
         else:
             if isinstance(error, AuthenticationError):
                 console.print(f"[red]Authentication failed: {error.message}[/red]")
-                console.print("[yellow]Check your token with: export ADMIN_TOKEN=your_token[/yellow]")
+                console.print("[yellow]Check your token with: export OAUTH_ACCESS_TOKEN=your_token[/yellow]")
             elif isinstance(error, ConfigurationError):
                 console.print(f"[red]Configuration error: {error.message}[/red]")
             elif isinstance(error, ProxyClientError):
@@ -121,8 +121,8 @@ class Context:
 )
 @click.option(
     '--token',
-    envvar=['TOKEN', 'ADMIN_TOKEN'],
-    help='Authentication token'
+    envvar='OAUTH_ACCESS_TOKEN',
+    help='OAuth access token'
 )
 @click.option(
     '--format',

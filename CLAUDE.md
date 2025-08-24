@@ -31,7 +31,7 @@ pip install -e ./oauth-https-proxy-client
 ## Configuration
 
 The client can be configured via:
-- **Environment Variables**: `TOKEN`, `ADMIN_TOKEN`, `API_URL`
+- **Environment Variables**: `OAUTH_ACCESS_TOKEN`, `OAUTH_REFRESH_TOKEN`, `API_URL`
 - **Command Line Options**: `--token`, `--base-url`, `--format`
 - **Configuration File**: `~/.config/proxy-client/config.yml`
 
@@ -49,7 +49,7 @@ format: table
 The client uses the flexible authentication system:
 - **Public endpoints**: No token required (e.g., health check)
 - **Bearer endpoints**: Requires any valid `acm_*` token
-- **Admin endpoints**: Requires `ADMIN_TOKEN` (e.g., auth configuration, token management)
+- **Admin endpoints**: Requires OAuth token with admin scope
 - **OAuth endpoints**: Requires OAuth token with appropriate scopes
 
 Most commands require at least bearer authentication. Admin operations require the admin token.
@@ -225,7 +225,7 @@ proxy-client oauth status
 
 ### Use with Environment Variable
 ```bash
-export TOKEN=acm_your_token_here
+export OAUTH_ACCESS_TOKEN=<your_oauth_jwt_token>
 proxy-client token list
 ```
 

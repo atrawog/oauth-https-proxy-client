@@ -24,23 +24,16 @@ class TokenManager:
         self.config = config
         self.access_token = None
         self.refresh_token = None
-        self.expires_at = None
-        self.scope = None
         self._load_from_env()
     
     def _load_from_env(self):
         """Load tokens from environment variables."""
-        self.access_token = os.getenv('OAUTH_ACCESS_TOKEN')
-        self.refresh_token = os.getenv('OAUTH_REFRESH_TOKEN')
+        # Get tokens, treating empty strings as None
+        access_token = os.getenv('OAUTH_ACCESS_TOKEN', '').strip()
+        self.access_token = access_token if access_token else None
         
-        expires_at_str = os.getenv('OAUTH_TOKEN_EXPIRES_AT')
-        if expires_at_str:
-            try:
-                self.expires_at = float(expires_at_str)
-            except (ValueError, TypeError):
-                self.expires_at = None
-        
-        self.scope = os.getenv('OAUTH_TOKEN_SCOPE', '')
+        refresh_token = os.getenv('OAUTH_REFRESH_TOKEN', '').strip()
+        self.refresh_token = refresh_token if refresh_token else None
     
     def is_valid(self, buffer_seconds: int = 300) -> bool:
         """Check if access token is valid with buffer.
@@ -51,11 +44,23 @@ class TokenManager:
         Returns:
             True if token is valid, False otherwise
         """
-        if not self.access_token or not self.expires_at:
+        if not self.access_token:
             return False
         
-        current_time = time.time()
-        return current_time < (self.expires_at - buffer_seconds)
+        # Decode the JWT to check expiry
+        try:
+            import jwt
+            
+            # Decode without verification to check expiry
+            claims = jwt.decode(self.access_token, options={"verify_signature": False})
+            if 'exp' in claims:
+                current_time = time.time()
+                return current_time < (claims['exp'] - buffer_seconds)
+        except:
+            pass
+        
+        # If we can't determine expiry, assume it's invalid
+        return False
     
     async def refresh(self) -> bool:
         """Refresh access token using refresh token.
@@ -89,10 +94,6 @@ class TokenManager:
                     if token_data.get('refresh_token'):
                         self.refresh_token = token_data.get('refresh_token')
                     
-                    expires_in = token_data.get('expires_in', 1800)
-                    self.expires_at = time.time() + expires_in
-                    self.scope = token_data.get('scope', self.scope)
-                    
                     # Save to .env
                     self.save_to_env()
                     
@@ -105,14 +106,12 @@ class TokenManager:
         return False
     
     def save_to_env(self):
-        """Save all tokens to .env file atomically."""
+        """Save OAuth tokens to .env file atomically (only access and refresh tokens)."""
         env_path = Path('.env')
         lines = []
         tokens_updated = {
             'OAUTH_ACCESS_TOKEN': False,
-            'OAUTH_REFRESH_TOKEN': False,
-            'OAUTH_TOKEN_EXPIRES_AT': False,
-            'OAUTH_TOKEN_SCOPE': False
+            'OAUTH_REFRESH_TOKEN': False
         }
         
         # Read existing .env if it exists
@@ -132,18 +131,9 @@ class TokenManager:
                             tokens_updated['OAUTH_REFRESH_TOKEN'] = True
                         else:
                             lines.append(line)
-                    elif line.startswith('OAUTH_TOKEN_EXPIRES_AT='):
-                        if self.expires_at:
-                            lines.append(f'OAUTH_TOKEN_EXPIRES_AT={self.expires_at}\n')
-                            tokens_updated['OAUTH_TOKEN_EXPIRES_AT'] = True
-                        else:
-                            lines.append(line)
-                    elif line.startswith('OAUTH_TOKEN_SCOPE='):
-                        if self.scope:
-                            lines.append(f'OAUTH_TOKEN_SCOPE={self.scope}\n')
-                            tokens_updated['OAUTH_TOKEN_SCOPE'] = True
-                        else:
-                            lines.append(line)
+                    elif line.startswith('OAUTH_TOKEN_EXPIRES_AT=') or line.startswith('OAUTH_TOKEN_SCOPE='):
+                        # Skip deprecated fields entirely
+                        continue
                     else:
                         lines.append(line)
         
@@ -155,12 +145,6 @@ class TokenManager:
         
         if not tokens_updated['OAUTH_REFRESH_TOKEN'] and self.refresh_token:
             lines.append(f'OAUTH_REFRESH_TOKEN={self.refresh_token}\n')
-        
-        if not tokens_updated['OAUTH_TOKEN_EXPIRES_AT'] and self.expires_at:
-            lines.append(f'OAUTH_TOKEN_EXPIRES_AT={self.expires_at}\n')
-        
-        if not tokens_updated['OAUTH_TOKEN_SCOPE'] and self.scope:
-            lines.append(f'OAUTH_TOKEN_SCOPE={self.scope}\n')
         
         # Write back to .env atomically
         with open(env_path, 'w') as f:
@@ -205,8 +189,19 @@ class DeviceFlowAuth:
             # Step 1: Get device code
             print(f"Requesting device code from {self.base_url}/device/code...")
             
+            # Build resource URI for MCP compliance
+            resource_uri = f"http://{self.domain}" if self.domain == "localhost" else f"https://{self.domain}"
+            
             with httpx.Client() as client:
-                response = client.post(f"{self.base_url}/device/code")
+                # Pass resource parameter for MCP-compliant device flow
+                response = client.post(
+                    f"{self.base_url}/device/code",
+                    data={
+                        "client_id": "device_flow_client",
+                        "scope": "read:user user:email",
+                        "resource": resource_uri
+                    }
+                )
                 response.raise_for_status()
                 device_data = response.json()
             
@@ -299,18 +294,16 @@ class DeviceFlowAuth:
             return None
     
     def save_tokens_to_env(self, access_token: str, refresh_token: str, 
-                           expires_at: float, scope: str):
-        """Save all OAuth tokens to .env file.
+                           expires_at: float = None, scope: str = None):
+        """Save OAuth tokens to .env file.
         
         Args:
             access_token: OAuth access token
             refresh_token: OAuth refresh token
-            expires_at: Unix timestamp when token expires
-            scope: Granted scopes
+            expires_at: Deprecated, ignored
+            scope: Deprecated, ignored
         """
         manager = TokenManager(None)
         manager.access_token = access_token
         manager.refresh_token = refresh_token
-        manager.expires_at = expires_at
-        manager.scope = scope
         manager.save_to_env()

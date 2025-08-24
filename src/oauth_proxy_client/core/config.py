@@ -28,10 +28,10 @@ class Config:
     
     # Primary Configuration (matching justfile)
     api_url: str = field(default_factory=lambda: os.getenv('API_URL', 'http://localhost:80'))
-    token: Optional[str] = field(default=None)
+    token: Optional[str] = field(default_factory=lambda: os.getenv('OAUTH_ACCESS_TOKEN'))
     
     # Testing Configuration
-    test_token: Optional[str] = field(default_factory=lambda: os.getenv('TEST_TOKEN'))
+    test_token: Optional[str] = field(default=None)
     test_api_url: str = field(default_factory=lambda: os.getenv('TEST_API_URL', 'https://test.atradev.org'))
     test_domain_base: str = field(default_factory=lambda: os.getenv('TEST_DOMAIN_BASE', 'atradev.org'))
     
@@ -74,9 +74,6 @@ class Config:
     
     # OAuth Token Fields
     oauth_refresh_token: Optional[str] = field(default_factory=lambda: os.getenv('OAUTH_REFRESH_TOKEN'))
-    oauth_token_expires_at: Optional[float] = field(default_factory=lambda: 
-        float(os.getenv('OAUTH_TOKEN_EXPIRES_AT', '0')))
-    oauth_token_scope: Optional[str] = field(default_factory=lambda: os.getenv('OAUTH_TOKEN_SCOPE'))
     
     # Output formatting
     output_format: str = field(default='auto')  # auto, json, table, yaml, csv
@@ -87,14 +84,9 @@ class Config:
     
     def __post_init__(self):
         """Post-initialization to handle token priority and config file loading."""
-        # Handle token priority: explicit > TOKEN > OAUTH_ACCESS_TOKEN > ADMIN_TOKEN > TEST_TOKEN
+        # Use OAUTH_ACCESS_TOKEN as the standard token
         if not self.token:
-            self.token = (
-                os.getenv('TOKEN') or 
-                os.getenv('OAUTH_ACCESS_TOKEN') or
-                os.getenv('ADMIN_TOKEN') or
-                (self.test_token if self.api_url == self.test_api_url else None)
-            )
+            self.token = os.getenv('OAUTH_ACCESS_TOKEN')
         
         # Load configuration file if specified
         if self.config_file and self.config_file.exists():
@@ -199,7 +191,7 @@ class Config:
         
         # Check required fields for certain operations
         if not self.token:
-            warnings.append("No authentication token configured (set TOKEN or ADMIN_TOKEN)")
+            warnings.append("No authentication token configured (set OAUTH_ACCESS_TOKEN)")
         
         if not self.api_url:
             warnings.append("No base URL configured (set API_URL)")
