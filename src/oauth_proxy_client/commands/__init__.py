@@ -1,6 +1,6 @@
 """Command modules for OAuth HTTPS Proxy Client."""
 
-from .tokens import token_group
+# Token commands removed - OAuth only authentication
 from .certificates import cert_group
 from .proxies import proxy_group
 from .routes import route_group
@@ -11,7 +11,6 @@ from .logs import log_group
 from .system import system_group
 
 __all__ = [
-    'token_group',
     'cert_group',
     'proxy_group',
     'route_group',

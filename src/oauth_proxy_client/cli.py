@@ -17,7 +17,7 @@ from .core.exceptions import (
 from .formatters import format_output
 
 # Import command groups
-from .commands.tokens import token_group
+# Token commands removed - OAuth only authentication
 from .commands.certificates import cert_group
 from .commands.proxies import proxy_group
 from .commands.routes import route_group
@@ -228,7 +228,7 @@ def cli(ctx, base_url, token, output_format, profile, config_file, timeout, debu
 
 
 # Add command groups
-cli.add_command(token_group)
+# Token commands removed - OAuth only authentication
 cli.add_command(cert_group)
 cli.add_command(proxy_group)
 cli.add_command(route_group)
