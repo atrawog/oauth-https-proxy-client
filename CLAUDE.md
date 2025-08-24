@@ -39,30 +39,31 @@ The client can be configured via:
 
 ```yaml
 # ~/.config/proxy-client/config.yml
-api_url: http://localhost:9000
-token: acm_your_token_here
+api_url: http://localhost:80
 format: table
+# OAuth tokens are stored in ~/.oauth-https-proxy-tokens.json
+# Use 'just oauth-login' to authenticate
 ```
 
-### Authentication Requirements
+### OAuth-Only Authentication
 
-The client uses the flexible authentication system:
-- **Public endpoints**: No token required (e.g., health check)
-- **Bearer endpoints**: Requires any valid `acm_*` token
-- **Admin endpoints**: Requires OAuth token with admin scope
-- **OAuth endpoints**: Requires OAuth token with appropriate scopes
+The client uses OAuth-only authentication:
+- **OAuth Login**: Use `proxy-client oauth login` to authenticate via GitHub
+- **Automatic Token Usage**: Tokens are stored in `~/.oauth-https-proxy-tokens.json`
+- **Three Scopes**: `admin` (write), `user` (read), `mcp` (protocol)
+- **No Bearer Tokens**: The `acm_*` token system has been removed
 
-Most commands require at least bearer authentication. Admin operations require the admin token.
+All commands automatically use your saved OAuth token. Admin operations require the `admin` scope.
 
 ## Enhanced Display Examples
 
-### Token List Display
+### OAuth Client List Display
 ```
 ┌──────────────┬──────────────────────┬──────────┬────────┐
-│ Token Name   │ Certificate Email    │ Created  │ Owner  │
+│ Client ID    │ Client Name          │ Created  │ Active │
 ├──────────────┼──────────────────────┼──────────┼────────┤
-│ admin        │ admin@example.com    │ 2d ago   │ —      │
-│ developer    │ dev@example.com      │ 5h ago   │ admin  │
+│ oauth_12345  │ Default Client       │ 2d ago   │ ●      │
+│ mcp_67890    │ MCP Client           │ 5h ago   │ ●      │
 └──────────────┴──────────────────────┴──────────┴────────┘
 ```
 
@@ -95,7 +96,7 @@ The client includes an intelligent table formatting system that automatically de
 
 ### Type Detection
 The formatter automatically detects these data types:
-- **tokens**: Detected by presence of `token` or `cert_email` fields
+- **oauth_clients**: Detected by presence of `client_id` or `client_secret` fields
 - **certificates**: Detected by `cert_name` or `fullchain_pem` fields  
 - **proxies**: Detected by `hostname` and `target_url` fields
 - **services**: Detected by `service_name` or `image` fields
