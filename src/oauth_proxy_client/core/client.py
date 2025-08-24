@@ -9,6 +9,7 @@ from httpx import Response, HTTPError, TimeoutException, ConnectError
 from rich.console import Console
 
 from .config import Config
+from .auth import TokenManager
 from .exceptions import (
     APIError,
     AuthenticationError,
@@ -38,6 +39,7 @@ class ProxyClient:
         """
         self.config = config or Config.from_env()
         self.dry_run = dry_run
+        self.token_manager = TokenManager(self.config)  # Initialize token manager
         self._client: Optional[httpx.AsyncClient] = None
         self._sync_client: Optional[httpx.Client] = None
     
@@ -112,6 +114,34 @@ class ProxyClient:
         if self._sync_client:
             self._sync_client.close()
             self._sync_client = None
+    
+    async def _ensure_valid_token(self):
+        """Ensure we have a valid OAuth token.
+        
+        This method checks if the current token is valid and refreshes it if needed.
+        Updates the configuration and client headers with the fresh token.
+        """
+        await self.token_manager.ensure_valid()
+        
+        # Update config with fresh token
+        if self.token_manager.access_token:
+            self.config.token = self.token_manager.access_token
+            
+            # Update client headers if client exists
+            if self._client:
+                self._client.headers['Authorization'] = f'Bearer {self.config.token}'
+            if self._sync_client:
+                self._sync_client.headers['Authorization'] = f'Bearer {self.config.token}'
+    
+    def _ensure_valid_token_sync(self):
+        """Synchronous version of token validation for sync methods."""
+        # Run the async version in a new event loop
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(self._ensure_valid_token())
+        finally:
+            loop.close()
     
     def _handle_response_error(self, response: Response):
         """Handle HTTP error responses.
@@ -194,10 +224,13 @@ class ProxyClient:
             if not path.endswith('/'):
                 path += '/'
         
+        # Ensure we have a valid token before making the request
+        await self._ensure_valid_token()
+        
         # Build full URL
         url = urljoin(self.config.api_url, path)
         
-        # Merge headers
+        # Merge headers (will now include fresh token)
         request_headers = self.config.get_headers()
         if headers:
             request_headers.update(headers)
@@ -271,10 +304,13 @@ class ProxyClient:
             if not path.endswith('/'):
                 path += '/'
         
+        # Ensure we have a valid token before making the request
+        self._ensure_valid_token_sync()
+        
         # Build full URL
         url = urljoin(self.config.api_url, path)
         
-        # Merge headers
+        # Merge headers (will now include fresh token)
         request_headers = self.config.get_headers()
         if headers:
             request_headers.update(headers)

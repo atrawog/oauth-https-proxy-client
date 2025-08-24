@@ -1,8 +1,14 @@
 """OAuth administration commands."""
 
+import sys
+import time
+import asyncio
+import jwt
+from datetime import datetime
 import click
 from rich.console import Console
 from rich.prompt import Confirm
+from rich.table import Table
 
 console = Console()
 
@@ -11,6 +17,340 @@ console = Console()
 def oauth_group():
     """OAuth administration and management."""
     pass
+
+
+# Helper function to display token information
+def display_token_info(access_token, refresh_token=None, scope=None, title="OAuth Token Information"):
+    """Display detailed token information in a table."""
+    try:
+        # Decode JWT token to show full information
+        claims = jwt.decode(access_token, options={"verify_signature": False})
+        
+        # Create a table for token information
+        table = Table(title=title, show_header=True, header_style="bold cyan")
+        table.add_column("Field", style="bright_blue", width=20)
+        table.add_column("Value", style="white")
+        
+        # Add user information
+        if 'username' in claims:
+            table.add_row("Username", claims['username'])
+        if 'sub' in claims:
+            table.add_row("User ID", str(claims['sub']))
+        if 'email' in claims:
+            table.add_row("Email", claims['email'])
+        if 'name' in claims:
+            table.add_row("Name", claims['name'])
+        
+        # Add scope
+        table.add_row("Scope", scope or claims.get('scope', 'N/A'))
+        
+        # Add audience
+        if 'aud' in claims:
+            aud = claims['aud']
+            if isinstance(aud, list):
+                aud_str = ', '.join(aud)
+            else:
+                aud_str = str(aud)
+            table.add_row("Audience (aud)", aud_str)
+        
+        # Add issuer
+        if 'iss' in claims:
+            table.add_row("Issuer", claims['iss'])
+        
+        # Add client ID
+        if 'azp' in claims:
+            table.add_row("Client ID", claims['azp'])
+        
+        # Add timestamps in ISO format
+        if 'iat' in claims:
+            iat_time = datetime.fromtimestamp(claims['iat'])
+            table.add_row("Issued At", iat_time.isoformat())
+        
+        if 'exp' in claims:
+            exp_time = datetime.fromtimestamp(claims['exp'])
+            table.add_row("Expires At", exp_time.isoformat())
+            
+            # Calculate time remaining
+            remaining = int((claims['exp'] - time.time()) / 60)
+            if remaining > 0:
+                table.add_row("Time Remaining", f"{remaining} minutes")
+            else:
+                table.add_row("Time Remaining", "[red]Expired[/red]")
+        
+        # Add refresh token status
+        if refresh_token:
+            table.add_row("Refresh Token", "[green]✓ Available[/green]")
+        else:
+            table.add_row("Refresh Token", "[yellow]✗ Not available[/yellow]")
+        
+        # Add token ID if present
+        if 'jti' in claims:
+            table.add_row("Token ID (jti)", claims['jti'])
+        
+        console.print(table)
+        return True
+    except Exception as e:
+        console.print(f"[yellow]Could not decode token details: {e}[/yellow]")
+        return False
+
+
+# Authentication commands
+@oauth_group.command('login')
+@click.option('--domain', default='localhost', help='OAuth server domain')
+@click.option('--no-browser', is_flag=True, help='Do not open browser automatically')
+@click.option('--force', is_flag=True, help='Force new login even if valid token exists')
+@click.pass_obj
+def oauth_login(ctx, domain, no_browser, force):
+    """Authenticate via GitHub Device Flow and save tokens to .env."""
+    try:
+        from ..core.auth import TokenManager, DeviceFlowAuth
+        
+        # First check if we already have a valid token (unless --force is used)
+        if not force:
+            manager = TokenManager(ctx.config)
+            
+            # If we have a valid token, just show it and exit
+            if manager.access_token and manager.is_valid():
+                console.print("\n[green]✓ Token is already valid![/green]\n")
+                display_token_info(
+                    manager.access_token, 
+                    manager.refresh_token, 
+                    manager.scope,
+                    title="Current OAuth Token (Already Valid)"
+                )
+                console.print("\n[dim]Use --force flag to get a new token anyway[/dim]")
+                return
+            
+            # If we have an expired token with refresh token, try to refresh
+            if manager.access_token and manager.refresh_token and not manager.is_valid():
+                console.print("[yellow]Token expired, attempting to refresh...[/yellow]")
+                
+                # Try to refresh the token
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    success = loop.run_until_complete(manager.refresh())
+                finally:
+                    loop.close()
+                
+                if success:
+                    console.print("\n[green]✓ Token refreshed successfully![/green]\n")
+                    display_token_info(
+                        manager.access_token,
+                        manager.refresh_token,
+                        manager.scope,
+                        title="Refreshed OAuth Token"
+                    )
+                    console.print("\n[green]Token automatically saved to .env[/green]")
+                    return
+                else:
+                    console.print("[yellow]Refresh failed, requesting new token...[/yellow]\n")
+        
+        # If we get here, we need to do a full device flow login
+        auth = DeviceFlowAuth(domain)
+        
+        # Start device flow
+        tokens = auth.authenticate(open_browser=not no_browser)
+        
+        if tokens:
+            # Save ALL tokens to .env
+            auth.save_tokens_to_env(
+                access_token=tokens['access_token'],
+                refresh_token=tokens['refresh_token'],
+                expires_at=tokens['expires_at'],
+                scope=tokens['scope']
+            )
+            
+            console.print("\n[green]✓ Authentication successful![/green]\n")
+            
+            # Display token information using helper function
+            display_token_info(
+                tokens['access_token'],
+                tokens.get('refresh_token'),
+                tokens.get('scope'),
+                title="New OAuth Token"
+            )
+            
+            console.print("\n[green]Tokens saved to .env[/green]")
+            console.print("[dim]To reload environment: source .env[/dim]")
+        else:
+            console.print("[red]✗ Authentication failed[/red]")
+            sys.exit(1)
+    except Exception as e:
+        ctx.handle_error(e)
+
+
+@oauth_group.command('status')
+@click.option('--quiet', is_flag=True, help='Quiet mode for scripting')
+@click.option('--detailed', '-d', is_flag=True, help='Show detailed token information')
+@click.pass_obj
+def oauth_status(ctx, quiet, detailed):
+    """Show current OAuth token status."""
+    try:
+        from ..core.auth import TokenManager
+        
+        manager = TokenManager(ctx.config)
+        
+        if not manager.access_token:
+            if not quiet:
+                console.print("[yellow]No OAuth token configured[/yellow]")
+                console.print("Run: proxy-client oauth login")
+            sys.exit(1)
+        
+        if manager.is_valid():
+            if not quiet:
+                if detailed:
+                    # Show detailed token information
+                    try:
+                        claims = jwt.decode(manager.access_token, options={"verify_signature": False})
+                        
+                        table = Table(title="Current OAuth Token", show_header=True, header_style="bold cyan")
+                        table.add_column("Field", style="bright_blue", width=20)
+                        table.add_column("Value", style="white")
+                        
+                        # Add status
+                        remaining = int((manager.expires_at - time.time()) / 60) if manager.expires_at else 0
+                        table.add_row("Status", f"[green]✓ Valid ({remaining} min remaining)[/green]")
+                        
+                        # Add user information
+                        if 'username' in claims:
+                            table.add_row("Username", claims['username'])
+                        if 'sub' in claims:
+                            table.add_row("User ID", str(claims['sub']))
+                        if 'email' in claims:
+                            table.add_row("Email", claims['email'])
+                        if 'name' in claims:
+                            table.add_row("Name", claims['name'])
+                        
+                        # Add scope
+                        table.add_row("Scope", manager.scope or claims.get('scope', 'N/A'))
+                        
+                        # Add audience
+                        if 'aud' in claims:
+                            aud = claims['aud']
+                            if isinstance(aud, list):
+                                aud_str = ', '.join(aud)
+                            else:
+                                aud_str = str(aud)
+                            table.add_row("Audience (aud)", aud_str)
+                        
+                        # Add issuer
+                        if 'iss' in claims:
+                            table.add_row("Issuer", claims['iss'])
+                        
+                        # Add client ID
+                        if 'azp' in claims:
+                            table.add_row("Client ID", claims['azp'])
+                        
+                        # Add timestamps in ISO format
+                        if 'iat' in claims:
+                            iat_time = datetime.fromtimestamp(claims['iat'])
+                            table.add_row("Issued At", iat_time.isoformat())
+                        
+                        if manager.expires_at:
+                            exp_time = datetime.fromtimestamp(manager.expires_at)
+                            table.add_row("Expires At", exp_time.isoformat())
+                        
+                        # Add refresh token status
+                        if manager.refresh_token:
+                            table.add_row("Refresh Token", "[green]✓ Available[/green]")
+                        else:
+                            table.add_row("Refresh Token", "[yellow]✗ Not available[/yellow]")
+                        
+                        # Add token ID if present
+                        if 'jti' in claims:
+                            table.add_row("Token ID (jti)", claims['jti'])
+                        
+                        console.print(table)
+                    except Exception as e:
+                        # Fallback to simple display
+                        console.print(f"[yellow]Could not decode token details: {e}[/yellow]")
+                        remaining = int((manager.expires_at - time.time()) / 60) if manager.expires_at else 0
+                        console.print(f"[green]✓ Token valid for {remaining} minutes[/green]")
+                        if manager.scope:
+                            console.print(f"Scopes: {manager.scope}")
+                else:
+                    # Simple display (default)
+                    remaining = int((manager.expires_at - time.time()) / 60) if manager.expires_at else 0
+                    console.print(f"[green]✓ Token valid for {remaining} minutes[/green]")
+                    
+                    if manager.scope:
+                        console.print(f"Scopes: {manager.scope}")
+                    
+                    if manager.refresh_token:
+                        console.print("[green]✓ Refresh token available[/green]")
+                    
+                    console.print("\n[dim]Use --detailed flag for full token information[/dim]")
+            sys.exit(0)
+        else:
+            if not quiet:
+                console.print("[red]✗ Token expired[/red]")
+                if manager.refresh_token:
+                    console.print("Run: proxy-client oauth refresh")
+                else:
+                    console.print("Run: proxy-client oauth login")
+            sys.exit(1)
+    except Exception as e:
+        if not quiet:
+            ctx.handle_error(e)
+        sys.exit(1)
+
+
+@oauth_group.command('refresh')
+@click.option('--quiet', is_flag=True, help='Quiet mode for scripting')
+@click.option('--detailed', '-d', is_flag=True, help='Show detailed token information after refresh')
+@click.pass_obj
+def oauth_refresh(ctx, quiet, detailed):
+    """Refresh OAuth access token using refresh token."""
+    try:
+        from ..core.auth import TokenManager
+        
+        manager = TokenManager(ctx.config)
+        
+        if not manager.refresh_token:
+            if not quiet:
+                console.print("[red]No refresh token available[/red]")
+                console.print("Run: proxy-client oauth login")
+            sys.exit(1)
+        
+        if not quiet:
+            console.print("Refreshing OAuth token...")
+        
+        # Run the async refresh
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            success = loop.run_until_complete(manager.refresh())
+        finally:
+            loop.close()
+        
+        if success:
+            if not quiet:
+                console.print("\n[green]✓ Token refreshed successfully![/green]\n")
+                
+                if detailed:
+                    # Show detailed token information
+                    display_token_info(
+                        manager.access_token,
+                        manager.refresh_token,
+                        manager.scope,
+                        title="Refreshed OAuth Token"
+                    )
+                else:
+                    remaining = int((manager.expires_at - time.time()) / 60) if manager.expires_at else 30
+                    console.print(f"Token valid for: {remaining} minutes")
+                
+                console.print("\n[green]Token automatically saved to .env[/green]")
+            sys.exit(0)
+        else:
+            if not quiet:
+                console.print("[red]✗ Token refresh failed[/red]")
+                console.print("Run: proxy-client oauth login --force")
+            sys.exit(1)
+    except Exception as e:
+        if not quiet:
+            ctx.handle_error(e)
+        sys.exit(1)
 
 
 # Client management

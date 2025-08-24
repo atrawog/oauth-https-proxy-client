@@ -72,6 +72,12 @@ class Config:
     redis_password: Optional[str] = field(default_factory=lambda: os.getenv('REDIS_PASSWORD'))
     redis_url: Optional[str] = field(default_factory=lambda: os.getenv('REDIS_URL'))
     
+    # OAuth Token Fields
+    oauth_refresh_token: Optional[str] = field(default_factory=lambda: os.getenv('OAUTH_REFRESH_TOKEN'))
+    oauth_token_expires_at: Optional[float] = field(default_factory=lambda: 
+        float(os.getenv('OAUTH_TOKEN_EXPIRES_AT', '0')))
+    oauth_token_scope: Optional[str] = field(default_factory=lambda: os.getenv('OAUTH_TOKEN_SCOPE'))
+    
     # Output formatting
     output_format: str = field(default='auto')  # auto, json, table, yaml, csv
     
@@ -81,10 +87,11 @@ class Config:
     
     def __post_init__(self):
         """Post-initialization to handle token priority and config file loading."""
-        # Handle token priority: explicit > TOKEN > ADMIN_TOKEN > TEST_TOKEN
+        # Handle token priority: explicit > TOKEN > OAUTH_ACCESS_TOKEN > ADMIN_TOKEN > TEST_TOKEN
         if not self.token:
             self.token = (
                 os.getenv('TOKEN') or 
+                os.getenv('OAUTH_ACCESS_TOKEN') or
                 os.getenv('ADMIN_TOKEN') or
                 (self.test_token if self.api_url == self.test_api_url else None)
             )
