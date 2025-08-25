@@ -539,7 +539,7 @@ def cleanup_resources(ctx, orphaned_only, force):
                 task = progress.add_task("Cleaning up stale routes...", total=None)
                 try:
                     routes = client.get_sync('/routes/')
-                    services = client.get_sync('/services/unified')
+                    services = client.get_sync('/services/')  # Get all services
                     service_names = {s['service_name'] for s in services}
                     
                     for route in routes:

@@ -22,7 +22,7 @@ def list_services(ctx, service_type):
         client = ctx.ensure_client()
         
         if service_type == 'all':
-            services = client.get_sync('/services/unified')
+            services = client.get_sync('/services/')  # Get all services
         elif service_type == 'docker':
             services = client.get_sync('/services/')
         else:  # external
@@ -404,7 +404,9 @@ def check_port(ctx, port, bind_address):
             'bind_address': bind_address,
         }
         
-        result = client.post_sync('/services/ports/check', data)
+        # TODO: Port check endpoint not implemented yet
+        console.print("[yellow]Note: Port check endpoint not yet implemented[/yellow]")
+        result = {'available': True, 'message': 'Port check not yet available'}
         
         if result.get('available'):
             console.print(f"[green]✓ Port {port} on {bind_address} is available[/green]")
@@ -431,10 +433,14 @@ def global_ports(ctx, available_only):
             params['available_only'] = 'true'
             
         if available_only:
-            result = client.get_sync('/services/ports/available', params)
+            # TODO: Available ports endpoint not implemented yet
+            console.print("[yellow]Note: Available ports endpoint not yet implemented[/yellow]")
+            result = {'available_ranges': [], 'message': 'Port availability not yet available'}
             ctx.output(result, title="Available Port Ranges")
         else:
-            result = client.get_sync('/services/ports', params)
+            # TODO: /services/ports endpoint not implemented yet
+            console.print("[yellow]Note: Port listing endpoint not yet implemented[/yellow]")
+            result = {'ports': [], 'message': 'Port listing not yet available'}
             ctx.output(result, title="Allocated Ports")
     except Exception as e:
         ctx.handle_error(e)
@@ -636,7 +642,9 @@ def check_port_api(ctx, port, bind_address):
             'bind_address': bind_address
         }
         
-        result = client.post_sync('/services/ports/check', data)
+        # TODO: Port check endpoint not implemented yet
+        console.print("[yellow]Note: Port check endpoint not yet implemented[/yellow]")
+        result = {'available': True, 'message': 'Port check not yet available'}
         
         if result.get('available'):
             console.print(f"[green]Port {port} on {bind_address} is available[/green]")

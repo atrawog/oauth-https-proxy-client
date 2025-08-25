@@ -206,7 +206,7 @@ def show_version(ctx):
         client = ctx.ensure_client()
         try:
             # Server might have version endpoint
-            server_info = client.get_sync('/version')
+            server_info = client.get_sync('/system/version')
             console.print(f"[bold]Server Version:[/bold] {server_info.get('version', 'Unknown')}")
         except Exception:
             # Try from health endpoint

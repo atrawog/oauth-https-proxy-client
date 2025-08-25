@@ -550,7 +550,8 @@ def oauth_health(ctx):
     """Check OAuth integration health."""
     try:
         client = ctx.ensure_client()
-        health = client.get_sync('/oauth/health')
+        # OAuth health is part of system health
+        health = client.get_sync('/health')
         
         if ctx.output_format == 'json':
             ctx.output(health)

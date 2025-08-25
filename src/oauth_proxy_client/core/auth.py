@@ -93,7 +93,8 @@ class TokenManager:
                     f"{base_url}/introspect",
                     data={
                         'token': self.access_token,
-                        'token_type_hint': 'access_token'
+                        'token_type_hint': 'access_token',
+                        'client_id': 'device_flow_client'  # Required for introspection
                     },
                     timeout=5.0
                 )
