@@ -42,7 +42,7 @@ The client can be configured via:
 api_url: http://localhost:80
 format: table
 # OAuth tokens are stored in ~/.oauth-https-proxy-tokens.json
-# Use 'just oauth-login' to authenticate
+# Use 'just oauth login' to authenticate
 ```
 
 ### OAuth-Only Authentication
