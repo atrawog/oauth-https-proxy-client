@@ -431,8 +431,7 @@ def oauth_refresh(ctx, quiet, detailed):
             sys.exit(0)
         else:
             if not quiet:
-                console.print("[red]✗ Token refresh failed[/red]")
-                console.print("Run: proxy-client oauth login --force")
+                console.print("[red]✗ Token refresh failed - check logs for details[/red]")
             sys.exit(1)
     except Exception as e:
         if not quiet:

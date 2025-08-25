@@ -4,12 +4,40 @@ import os
 import sys
 import time
 import json
+import logging
 from pathlib import Path
 from typing import Optional, Dict, Any
 import httpx
 from datetime import datetime, timedelta
 
 from .exceptions import AuthenticationError
+
+# Set up logger
+logger = logging.getLogger(__name__)
+
+# Configure based on LOG_LEVEL environment variable
+log_level = os.getenv('LOG_LEVEL', 'INFO').upper()
+level_map = {
+    'TRACE': 5,  # Custom level below DEBUG
+    'DEBUG': logging.DEBUG,
+    'INFO': logging.INFO,
+    'WARNING': logging.WARNING,
+    'ERROR': logging.ERROR,
+    'CRITICAL': logging.CRITICAL
+}
+logging.basicConfig(
+    level=level_map.get(log_level, logging.INFO),
+    format='%(name)s:%(levelname)s: %(message)s'
+)
+
+# Add TRACE level if needed
+if not hasattr(logging, 'TRACE'):
+    logging.TRACE = 5
+    logging.addLevelName(logging.TRACE, 'TRACE')
+    def trace(self, message, *args, **kwargs):
+        if self.isEnabledFor(logging.TRACE):
+            self._log(logging.TRACE, message, args, **kwargs)
+    logging.Logger.trace = trace
 
 
 class TokenManager:
@@ -30,13 +58,73 @@ class TokenManager:
         """Load tokens from environment variables."""
         # Get tokens, treating empty strings as None
         access_token = os.getenv('OAUTH_ACCESS_TOKEN', '').strip()
-        self.access_token = access_token if access_token else None
-        
         refresh_token = os.getenv('OAUTH_REFRESH_TOKEN', '').strip()
+        
+        self.access_token = access_token if access_token else None
         self.refresh_token = refresh_token if refresh_token else None
+        
+        # Log at DEBUG level
+        if self.access_token:
+            logger.debug(f"OAUTH_ACCESS_TOKEN loaded from environment (length: {len(self.access_token)})")
+        else:
+            logger.debug("OAUTH_ACCESS_TOKEN not found in environment")
+        
+        if self.refresh_token:
+            logger.debug(f"OAUTH_REFRESH_TOKEN loaded from environment (length: {len(self.refresh_token)})")
+        else:
+            logger.debug("OAUTH_REFRESH_TOKEN not found in environment")
+    
+    async def validate_with_server(self) -> bool:
+        """Validate token with OAuth server using introspection endpoint.
+        
+        Returns:
+            True if token is active, False otherwise
+        """
+        if not self.access_token:
+            logger.debug("No access token to validate")
+            return False
+        
+        base_url = self.config.api_url or 'http://localhost'
+        logger.debug(f"Validating token with {base_url}/introspect")
+        
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{base_url}/introspect",
+                    data={
+                        'token': self.access_token,
+                        'token_type_hint': 'access_token'
+                    },
+                    timeout=5.0
+                )
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    is_active = result.get('active', False)
+                    
+                    if is_active:
+                        logger.debug(f"Token is active (scope: {result.get('scope', 'unknown')})")
+                    else:
+                        logger.debug("Token is not active")
+                    
+                    return is_active
+                else:
+                    logger.warning(f"Token introspection failed: HTTP {response.status_code}")
+                    return False
+                    
+        except httpx.ConnectError as e:
+            logger.warning(f"Cannot connect to {base_url} for validation: {e}")
+            # Fall back to local JWT validation
+            return self.is_valid()
+        except httpx.TimeoutException:
+            logger.warning("Token validation timed out, using local validation")
+            return self.is_valid()
+        except Exception as e:
+            logger.error(f"Token validation error: {type(e).__name__}: {e}")
+            return False
     
     def is_valid(self, buffer_seconds: int = 300) -> bool:
-        """Check if access token is valid with buffer.
+        """Check if access token is valid locally (fallback when server unavailable).
         
         Args:
             buffer_seconds: Number of seconds before expiry to consider invalid (default: 5 minutes)
@@ -47,20 +135,31 @@ class TokenManager:
         if not self.access_token:
             return False
         
-        # Decode the JWT to check expiry
         try:
             import jwt
-            
-            # Decode without verification to check expiry
             claims = jwt.decode(self.access_token, options={"verify_signature": False})
-            if 'exp' in claims:
-                current_time = time.time()
-                return current_time < (claims['exp'] - buffer_seconds)
-        except:
-            pass
-        
-        # If we can't determine expiry, assume it's invalid
-        return False
+            
+            if 'exp' not in claims:
+                logger.debug("Token has no expiration claim")
+                return False
+            
+            current_time = time.time()
+            expires_at = claims['exp']
+            time_left = expires_at - current_time
+            
+            if time_left < buffer_seconds:
+                logger.debug(f"Token expires in {int(time_left)}s (less than {buffer_seconds}s buffer)")
+                return False
+            
+            logger.trace(f"Token valid for {int(time_left)}s")
+            return True
+            
+        except jwt.DecodeError as e:
+            logger.error(f"Invalid JWT format: {e}")
+            return False
+        except Exception as e:
+            logger.error(f"JWT validation error: {type(e).__name__}: {e}")
+            return False
     
     async def refresh(self) -> bool:
         """Refresh access token using refresh token.
@@ -69,11 +168,14 @@ class TokenManager:
             True if refresh successful, False otherwise
         """
         if not self.refresh_token:
+            logger.info("No refresh token available for token refresh")
             return False
         
+        base_url = self.config.api_url or 'http://localhost'
+        logger.debug(f"Refreshing token at {base_url}/token")
+        logger.trace(f"Using refresh_token: {self.refresh_token[:10]}..." if len(self.refresh_token) > 10 else "Using refresh_token")
+        
         try:
-            base_url = self.config.api_url or 'http://localhost'
-            
             async with httpx.AsyncClient() as client:
                 response = await client.post(
                     f"{base_url}/token",
@@ -85,25 +187,49 @@ class TokenManager:
                     timeout=30.0
                 )
                 
+                logger.debug(f"Token refresh response: HTTP {response.status_code}")
+                
                 if response.status_code == 200:
                     token_data = response.json()
-                    
-                    # Update tokens in memory
                     self.access_token = token_data.get('access_token')
-                    # Keep existing refresh token if not returned
+                    
                     if token_data.get('refresh_token'):
                         self.refresh_token = token_data.get('refresh_token')
+                        logger.debug("New refresh token received")
                     
-                    # Save to .env
                     self.save_to_env()
-                    
+                    logger.info("Token refreshed successfully")
                     return True
+                
+                # Log specific OAuth errors
+                try:
+                    error_data = response.json()
+                    error = error_data.get('error', 'unknown_error')
+                    desc = error_data.get('error_description', '')
                     
+                    if error == 'invalid_grant':
+                        logger.error(f"Refresh token is invalid or expired: {desc}")
+                    elif error == 'invalid_client':
+                        logger.error(f"Client authentication failed: {desc}")
+                    else:
+                        logger.error(f"OAuth error '{error}': {desc}")
+                except:
+                    logger.error(f"Token refresh failed: HTTP {response.status_code}")
+                    if response.text:
+                        logger.debug(f"Response body: {response.text[:500]}")
+                
+                return False
+                
+        except httpx.ConnectError as e:
+            logger.error(f"Cannot connect to {base_url}: {e}")
+            return False
+        except httpx.TimeoutException:
+            logger.error("Token refresh timed out after 30 seconds")
+            return False
         except Exception as e:
-            # Silently fail - caller will handle
-            pass
-        
-        return False
+            logger.error(f"Unexpected error during refresh: {type(e).__name__}: {e}")
+            logger.debug("Full traceback:", exc_info=True)
+            return False
     
     def save_to_env(self):
         """Save OAuth tokens to .env file atomically (only access and refresh tokens)."""
@@ -150,18 +276,40 @@ class TokenManager:
         with open(env_path, 'w') as f:
             f.writelines(lines)
     
-    async def ensure_valid(self):
+    async def ensure_valid(self, use_server_validation: bool = True):
         """Ensure we have a valid access token.
         
+        Args:
+            use_server_validation: If True, validate with server first
+            
         Raises:
             AuthenticationError: If no valid token and cannot refresh
         """
-        if not self.is_valid():
-            if self.refresh_token:
-                if not await self.refresh():
-                    raise AuthenticationError("Token refresh failed - please run: proxy-client oauth login")
-            else:
-                raise AuthenticationError("No valid OAuth token - please run: proxy-client oauth login")
+        # Try server validation first if enabled
+        if use_server_validation:
+            if await self.validate_with_server():
+                return
+        elif self.is_valid():
+            return
+        
+        # Token is invalid or missing
+        if not self.access_token:
+            if not self.refresh_token:
+                logger.info("No OAuth tokens found - need to authenticate")
+                raise AuthenticationError("No OAuth tokens available")
+            
+            logger.info("No access token, attempting refresh")
+            if not await self.refresh():
+                raise AuthenticationError("Failed to obtain access token using refresh token")
+        else:
+            # Have access token but it's invalid
+            if not self.refresh_token:
+                logger.info("Access token invalid and no refresh token available")
+                raise AuthenticationError("Token invalid and no refresh token available")
+            
+            logger.info("Access token invalid, attempting refresh")
+            if not await self.refresh():
+                raise AuthenticationError("Failed to refresh invalid token")
 
 
 class DeviceFlowAuth:
@@ -174,7 +322,11 @@ class DeviceFlowAuth:
             domain: OAuth server domain (default: localhost)
         """
         self.domain = domain
-        self.base_url = f"http://{domain}" if domain == "localhost" else f"https://{domain}"
+        # Use the domain as provided - don't tamper with it
+        if domain == "localhost":
+            self.base_url = "http://localhost"
+        else:
+            self.base_url = f"https://{domain}"
     
     def authenticate(self, open_browser: bool = True) -> Optional[Dict[str, Any]]:
         """Perform device flow authentication.
