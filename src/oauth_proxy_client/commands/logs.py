@@ -3,6 +3,7 @@
 import click
 import asyncio
 import time
+import json
 from rich.console import Console
 from rich.live import Live
 from rich.table import Table
@@ -680,5 +681,268 @@ def logs_by_oauth_user(ctx, username, hours, limit):
         
         logs = client.get_sync(f'/logs/oauth/user/{username}', params)
         ctx.output(logs, title=f"Logs for OAuth User: {username}", data_type='logs')
+    except Exception as e:
+        ctx.handle_error(e)
+
+
+# ==================== LOG LEVEL MANAGEMENT ====================
+
+@log_group.group('level')
+def log_level_group():
+    """Manage log levels dynamically."""
+    pass
+
+
+@log_level_group.command('set')
+@click.argument('level', type=click.Choice(['TRACE', 'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'], case_sensitive=False))
+@click.option('--component', '-c', help='Component name (omit for global)')
+@click.pass_obj
+def set_log_level(ctx, level, component):
+    """Set log level for global or specific component.
+    
+    Examples:
+        log level set INFO                 # Set global level to INFO
+        log level set DEBUG --component proxy  # Set proxy component to DEBUG
+    """
+    try:
+        client = ctx.ensure_client()
+        
+        data = {'level': level.upper()}
+        if component:
+            data['component'] = component
+        
+        result = client.post_sync('/logs/level', data)
+        
+        component_name = component or 'global'
+        console.print(f"[green]✓[/green] Log level update initiated for {component_name}: {level.upper()}")
+        
+        ctx.output(result, title="Log Level Update")
+    except Exception as e:
+        ctx.handle_error(e)
+
+
+@log_level_group.command('get')
+@click.option('--component', '-c', help='Get level for specific component')
+@click.pass_obj
+def get_log_levels(ctx, component):
+    """Get current log levels.
+    
+    Shows global and component-specific log levels.
+    """
+    try:
+        client = ctx.ensure_client()
+        
+        levels = client.get_sync('/logs/level')
+        
+        if component:
+            # Show specific component
+            comp_level = levels.get('components', {}).get(component)
+            if comp_level:
+                console.print(f"{component}: {comp_level}")
+            else:
+                console.print(f"{component}: [dim](using global: {levels.get('global', 'INFO')})[/dim]")
+        else:
+            # Show all levels in a table
+            table = Table(title="Log Levels")
+            table.add_column("Component", style="cyan")
+            table.add_column("Level", style="yellow")
+            
+            # Add global level
+            table.add_row("global", levels.get('global', 'INFO'))
+            
+            # Add component levels
+            for comp, level in levels.get('components', {}).items():
+                table.add_row(comp, level)
+            
+            console.print(table)
+            
+    except Exception as e:
+        ctx.handle_error(e)
+
+
+@log_level_group.command('reset')
+@click.argument('component')
+@click.option('--confirm', is_flag=True, help='Skip confirmation prompt')
+@click.pass_obj
+def reset_log_level(ctx, component, confirm):
+    """Reset component log level to default.
+    
+    Removes component-specific override, reverting to global level.
+    """
+    try:
+        if not confirm:
+            if not Confirm.ask(f"Reset log level for {component} to default?"):
+                console.print("[yellow]Cancelled[/yellow]")
+                return
+        
+        client = ctx.ensure_client()
+        
+        result = client.delete_sync(f'/logs/level/{component}')
+        
+        console.print(f"[green]✓[/green] Log level reset initiated for {component}")
+        ctx.output(result, title="Log Level Reset")
+        
+    except Exception as e:
+        ctx.handle_error(e)
+
+
+# ==================== LOG FILTER MANAGEMENT ====================
+
+@log_group.group('filter')
+def log_filter_group():
+    """Manage log filters dynamically."""
+    pass
+
+
+@log_filter_group.command('set')
+@click.argument('component')
+@click.option('--suppress-pattern', '-s', multiple=True, help='Regex pattern to suppress (can be repeated)')
+@click.option('--sample-rate', '-r', multiple=True, help='Sample rate as LEVEL:RATE (e.g., DEBUG:0.1)')
+@click.option('--rate-limit', '-l', multiple=True, help='Rate limit as TYPE:LIMIT (e.g., same_message:10/minute)')
+@click.pass_obj
+def set_log_filter(ctx, component, suppress_pattern, sample_rate, rate_limit):
+    """Set log filters for a component.
+    
+    Examples:
+        log filter set proxy -s ".*health.*" -s ".*OPTIONS.*"
+        log filter set api -r TRACE:0.01 -r DEBUG:0.1
+        log filter set proxy -l same_message:10/minute -l same_error:5/minute
+    """
+    try:
+        client = ctx.ensure_client()
+        
+        data = {'component': component}
+        
+        # Add suppress patterns if provided
+        if suppress_pattern:
+            data['suppress_patterns'] = list(suppress_pattern)
+        
+        # Parse and add sample rates
+        if sample_rate:
+            rates = {}
+            for rate_spec in sample_rate:
+                if ':' in rate_spec:
+                    level, rate = rate_spec.split(':', 1)
+                    rates[level.upper()] = float(rate)
+            if rates:
+                data['sample_rates'] = rates
+        
+        # Parse and add rate limits
+        if rate_limit:
+            limits = {}
+            for limit_spec in rate_limit:
+                if ':' in limit_spec:
+                    limit_type, limit_val = limit_spec.split(':', 1)
+                    limits[limit_type] = limit_val
+            if limits:
+                data['rate_limits'] = limits
+        
+        result = client.post_sync('/logs/filter', data)
+        
+        console.print(f"[green]✓[/green] Filter update initiated for {component}")
+        ctx.output(result, title="Filter Update")
+        
+    except Exception as e:
+        ctx.handle_error(e)
+
+
+@log_filter_group.command('get')
+@click.argument('component')
+@click.pass_obj
+def get_log_filter(ctx, component):
+    """Get log filter configuration for a component."""
+    try:
+        client = ctx.ensure_client()
+        
+        result = client.get_sync(f'/logs/filter/{component}')
+        
+        if result.get('filter'):
+            console.print(f"\n[bold]Filters for {component}:[/bold]")
+            
+            filter_config = result['filter']
+            
+            # Show suppress patterns
+            if 'suppress_patterns' in filter_config:
+                console.print("\n[cyan]Suppress Patterns:[/cyan]")
+                for pattern in filter_config['suppress_patterns']:
+                    console.print(f"  • {pattern}")
+            
+            # Show sample rates
+            if 'sample_rates' in filter_config:
+                console.print("\n[cyan]Sample Rates:[/cyan]")
+                for level, rate in filter_config['sample_rates'].items():
+                    percentage = rate * 100
+                    console.print(f"  • {level}: {percentage:.1f}%")
+            
+            # Show rate limits
+            if 'rate_limits' in filter_config:
+                console.print("\n[cyan]Rate Limits:[/cyan]")
+                for limit_type, limit_val in filter_config['rate_limits'].items():
+                    console.print(f"  • {limit_type}: {limit_val}")
+        else:
+            console.print(f"[dim]No filters configured for {component}[/dim]")
+            
+    except Exception as e:
+        ctx.handle_error(e)
+
+
+@log_filter_group.command('reset')
+@click.argument('component')
+@click.option('--confirm', is_flag=True, help='Skip confirmation prompt')
+@click.pass_obj
+def reset_log_filter(ctx, component, confirm):
+    """Reset (remove) log filters for a component."""
+    try:
+        if not confirm:
+            if not Confirm.ask(f"Remove all filters for {component}?"):
+                console.print("[yellow]Cancelled[/yellow]")
+                return
+        
+        client = ctx.ensure_client()
+        
+        result = client.delete_sync(f'/logs/filter/{component}')
+        
+        console.print(f"[green]✓[/green] Filter reset initiated for {component}")
+        ctx.output(result, title="Filter Reset")
+        
+    except Exception as e:
+        ctx.handle_error(e)
+
+
+@log_filter_group.command('stats')
+@click.pass_obj
+def get_filter_stats(ctx):
+    """Get statistics about filtered logs.
+    
+    Shows counts of suppressed, sampled, and rate-limited logs.
+    """
+    try:
+        client = ctx.ensure_client()
+        
+        stats = client.get_sync('/logs/filter-stats')
+        
+        # Create a table for stats
+        table = Table(title="Filter Statistics")
+        table.add_column("Type", style="cyan")
+        table.add_column("Component/Level", style="yellow")
+        table.add_column("Count", style="green", justify="right")
+        
+        # Add suppressed stats
+        for comp, count in stats.get('suppressed', {}).items():
+            table.add_row("Suppressed", comp, str(count))
+        
+        # Add sampled stats
+        for key, count in stats.get('sampled', {}).items():
+            table.add_row("Sampled", key, str(count))
+        
+        # Add rate limited stats
+        for comp, count in stats.get('rate_limited', {}).items():
+            table.add_row("Rate Limited", comp, str(count))
+        
+        if table.row_count > 0:
+            console.print(table)
+        else:
+            console.print("[dim]No filtering statistics available[/dim]")
+            
     except Exception as e:
         ctx.handle_error(e)

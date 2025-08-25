@@ -107,7 +107,7 @@ class Config:
             if env_file.exists():
                 load_dotenv(env_file)
         elif Path('.env').exists():
-            load_dotenv()
+            load_dotenv(Path('.env').absolute())
         
         return cls()
     
@@ -245,7 +245,10 @@ class Config:
         }
         
         if self.token:
+            print(f"DEBUG CLIENT: Adding token to headers, token length: {len(self.token)}")
             headers['Authorization'] = f'Bearer {self.token}'
+        else:
+            print(f"DEBUG CLIENT: No token available, not adding Authorization header")
         
         return headers
     
