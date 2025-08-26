@@ -12,6 +12,10 @@ from dataclasses import dataclass, field
 from dotenv import load_dotenv
 
 from .exceptions import ConfigurationError
+from .logging import get_logger
+
+# Get logger for this module
+logger = get_logger('config')
 
 
 @dataclass
@@ -245,10 +249,10 @@ class Config:
         }
         
         if self.token:
-            print(f"DEBUG CLIENT: Adding token to headers, token length: {len(self.token)}")
+            logger.trace(f"Adding token to headers, token length: {len(self.token)}")
             headers['Authorization'] = f'Bearer {self.token}'
         else:
-            print(f"DEBUG CLIENT: No token available, not adding Authorization header")
+            logger.trace("No token available, not adding Authorization header")
         
         return headers
     

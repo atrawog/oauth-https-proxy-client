@@ -4,40 +4,16 @@ import os
 import sys
 import time
 import json
-import logging
 from pathlib import Path
 from typing import Optional, Dict, Any
 import httpx
 from datetime import datetime, timedelta
 
 from .exceptions import AuthenticationError
+from .logging import get_logger
 
-# Set up logger
-logger = logging.getLogger(__name__)
-
-# Configure based on LOG_LEVEL environment variable
-log_level = os.getenv('LOG_LEVEL', 'INFO').upper()
-level_map = {
-    'TRACE': 5,  # Custom level below DEBUG
-    'DEBUG': logging.DEBUG,
-    'INFO': logging.INFO,
-    'WARNING': logging.WARNING,
-    'ERROR': logging.ERROR,
-    'CRITICAL': logging.CRITICAL
-}
-logging.basicConfig(
-    level=level_map.get(log_level, logging.INFO),
-    format='%(name)s:%(levelname)s: %(message)s'
-)
-
-# Add TRACE level if needed
-if not hasattr(logging, 'TRACE'):
-    logging.TRACE = 5
-    logging.addLevelName(logging.TRACE, 'TRACE')
-    def trace(self, message, *args, **kwargs):
-        if self.isEnabledFor(logging.TRACE):
-            self._log(logging.TRACE, message, args, **kwargs)
-    logging.Logger.trace = trace
+# Get logger for this module
+logger = get_logger('auth')
 
 
 class TokenManager:

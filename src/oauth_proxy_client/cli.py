@@ -9,6 +9,7 @@ from rich.console import Console
 
 from .core.config import Config
 from .core.client import ProxyClient
+from .core.logging import setup_logging, get_logger
 from .core.exceptions import (
     ProxyClientError,
     AuthenticationError,
@@ -171,13 +172,17 @@ def cli(ctx, base_url, token, output_format, profile, config_file, timeout, debu
     Environment variables:
         API_URL: API endpoint (default: http://localhost:80)
         ADMIN_TOKEN or TOKEN: Authentication token
-        LOG_LEVEL: Logging level (DEBUG, INFO, WARNING, ERROR)
+        LOG_LEVEL: Logging level (TRACE, DEBUG, INFO, WARNING, ERROR)
     
     Examples:
         proxy-client token list
         proxy-client proxy create api.example.com http://backend:8080
         proxy-client cert create my-cert example.com --email admin@example.com
     """
+    # Set up logging based on debug flag
+    # When debug is enabled, set to TRACE level for maximum verbosity
+    setup_logging(level="TRACE" if debug else None, debug=debug)
+    
     # Initialize context
     context = Context()
     context.output_format = output_format
