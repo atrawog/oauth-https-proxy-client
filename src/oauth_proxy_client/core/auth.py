@@ -39,16 +39,16 @@ class TokenManager:
         self.access_token = access_token if access_token else None
         self.refresh_token = refresh_token if refresh_token else None
         
-        # Log at DEBUG level
+        # Log at TRACE level
         if self.access_token:
-            logger.debug(f"OAUTH_ACCESS_TOKEN loaded from environment (length: {len(self.access_token)})")
+            logger.trace(f"OAUTH_ACCESS_TOKEN loaded from environment (length: {len(self.access_token)})")
         else:
-            logger.debug("OAUTH_ACCESS_TOKEN not found in environment")
+            logger.trace("OAUTH_ACCESS_TOKEN not found in environment")
         
         if self.refresh_token:
-            logger.debug(f"OAUTH_REFRESH_TOKEN loaded from environment (length: {len(self.refresh_token)})")
+            logger.trace(f"OAUTH_REFRESH_TOKEN loaded from environment (length: {len(self.refresh_token)})")
         else:
-            logger.debug("OAUTH_REFRESH_TOKEN not found in environment")
+            logger.trace("OAUTH_REFRESH_TOKEN not found in environment")
     
     async def validate_with_server(self) -> bool:
         """Validate token with OAuth server using introspection endpoint.
@@ -57,11 +57,11 @@ class TokenManager:
             True if token is active, False otherwise
         """
         if not self.access_token:
-            logger.debug("No access token to validate")
+            logger.trace("No access token to validate")
             return False
         
         base_url = self.config.api_url or 'http://localhost'
-        logger.debug(f"Validating token with {base_url}/introspect")
+        logger.trace(f"Validating token with {base_url}/introspect")
         
         try:
             async with httpx.AsyncClient() as client:
@@ -80,9 +80,9 @@ class TokenManager:
                     is_active = result.get('active', False)
                     
                     if is_active:
-                        logger.debug(f"Token is active (scope: {result.get('scope', 'unknown')})")
+                        logger.trace(f"Token is active (scope: {result.get('scope', 'unknown')})")
                     else:
-                        logger.debug("Token is not active")
+                        logger.trace("Token is not active")
                     
                     return is_active
                 else:
@@ -117,7 +117,7 @@ class TokenManager:
             claims = jwt.decode(self.access_token, options={"verify_signature": False})
             
             if 'exp' not in claims:
-                logger.debug("Token has no expiration claim")
+                logger.trace("Token has no expiration claim")
                 return False
             
             current_time = time.time()
@@ -125,7 +125,7 @@ class TokenManager:
             time_left = expires_at - current_time
             
             if time_left < buffer_seconds:
-                logger.debug(f"Token expires in {int(time_left)}s (less than {buffer_seconds}s buffer)")
+                logger.trace(f"Token expires in {int(time_left)}s (less than {buffer_seconds}s buffer)")
                 return False
             
             logger.trace(f"Token valid for {int(time_left)}s")
@@ -149,7 +149,7 @@ class TokenManager:
             return False
         
         base_url = self.config.api_url or 'http://localhost'
-        logger.debug(f"Refreshing token at {base_url}/token")
+        logger.trace(f"Refreshing token at {base_url}/token")
         logger.trace(f"Using refresh_token: {self.refresh_token[:10]}..." if len(self.refresh_token) > 10 else "Using refresh_token")
         
         try:
@@ -164,7 +164,7 @@ class TokenManager:
                     timeout=30.0
                 )
                 
-                logger.debug(f"Token refresh response: HTTP {response.status_code}")
+                logger.trace(f"Token refresh response: HTTP {response.status_code}")
                 
                 if response.status_code == 200:
                     token_data = response.json()
@@ -172,7 +172,7 @@ class TokenManager:
                     
                     if token_data.get('refresh_token'):
                         self.refresh_token = token_data.get('refresh_token')
-                        logger.debug("New refresh token received")
+                        logger.trace("New refresh token received")
                     
                     self.save_to_env()
                     logger.info("Token refreshed successfully")
@@ -193,7 +193,7 @@ class TokenManager:
                 except:
                     logger.error(f"Token refresh failed: HTTP {response.status_code}")
                     if response.text:
-                        logger.debug(f"Response body: {response.text[:500]}")
+                        logger.trace(f"Response body: {response.text[:500]}")
                 
                 return False
                 
@@ -205,7 +205,7 @@ class TokenManager:
             return False
         except Exception as e:
             logger.error(f"Unexpected error during refresh: {type(e).__name__}: {e}")
-            logger.debug("Full traceback:", exc_info=True)
+            logger.trace("Full traceback:", exc_info=True)
             return False
     
     def save_to_env(self):
