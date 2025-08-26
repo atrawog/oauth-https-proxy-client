@@ -627,9 +627,9 @@ class EnhancedTableFormatter:
             output.append(f"{status_marker} ", style=status_color)
             
             if is_http_request:
-                # HTTP request format
-                method = log.get('method', '')
-                path = log.get('path', '/')
+                # HTTP request format (support both old and new field names)
+                method = log.get('request_method') or log.get('method', '')
+                path = log.get('request_path') or log.get('path', '/')
                 response_time = log.get('response_time_ms', 0)
                 
                 output.append(f"{status} ", style=status_color if status else "dim")
@@ -692,9 +692,9 @@ class EnhancedTableFormatter:
                 else:
                     output.append("\n")
             
-            # Line 4: Query parameters
-            query = log.get('query', '')
-            if query:
+            # Line 4: Query parameters (only show if not null/empty)
+            query = log.get('request_query') or log.get('query', '')
+            if query and query != 'null' and query != 'None':
                 output.append("  Query: ", style="dim")
                 output.append(f"{query}\n", style="white")
             
@@ -707,19 +707,19 @@ class EnhancedTableFormatter:
                 output.append(" user=", style="dim")
                 output.append(f"{oauth_user or 'N/A'}\n", style="cyan")
             
-            # Line 6: User agent (only for HTTP requests)
+            # Line 6: User agent (only for HTTP requests, skip if null/empty)
             if is_http_request:
                 user_agent = log.get('user_agent', '')
-                if user_agent:
+                if user_agent and user_agent != 'null' and user_agent != 'None' and user_agent != 'unknown':
                     # Truncate long user agents unless in debug mode
                     if not is_debug and len(user_agent) > 80:
                         user_agent = user_agent[:77] + "..."
                     output.append("  UA: ", style="dim")
                     output.append(f"{user_agent}\n", style="white")
             
-            # Line 7: Referrer
+            # Line 7: Referrer (only show if not null/empty)
             referer = log.get('referer', '') or log.get('referrer', '')
-            if referer:
+            if referer and referer != 'null' and referer != 'None':
                 output.append("  Referer: ", style="dim")
                 output.append(f"{referer}\n", style="white")
             

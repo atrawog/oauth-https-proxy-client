@@ -18,6 +18,46 @@ def log_group():
     pass
 
 
+@log_group.command('show')
+@click.option('--hours', type=int, default=1, help='Hours to look back')
+@click.option('--limit', type=int, default=100, help='Maximum results')
+@click.pass_obj
+def show_recent_logs(ctx, hours, limit):
+    """Show recent logs from Redis (last hour by default)."""
+    try:
+        client = ctx.ensure_client()
+        
+        params = {
+            'hours': hours,
+            'limit': limit,
+        }
+        
+        logs = client.get_sync('/logs/search', params)
+        ctx.output(logs, title=f"Recent Logs (Last {hours} hour{'s' if hours != 1 else ''})", data_type='logs')
+    except Exception as e:
+        ctx.handle_error(e)
+
+
+@log_group.command('all')
+@click.option('--hours', type=int, default=1, help='Hours to look back')
+@click.option('--limit', type=int, default=500, help='Maximum results')
+@click.pass_obj
+def show_all_logs(ctx, hours, limit):
+    """Show all logs from Redis (from the last hour by default)."""
+    try:
+        client = ctx.ensure_client()
+        
+        params = {
+            'hours': hours,
+            'limit': limit,
+        }
+        
+        logs = client.get_sync('/logs/search', params)
+        ctx.output(logs, title=f"All Logs (Last {hours} hour{'s' if hours != 1 else ''})", data_type='logs')
+    except Exception as e:
+        ctx.handle_error(e)
+
+
 @log_group.command('search')
 @click.option('--query', '-q', help='Search query')
 @click.option('--hours', type=int, default=1, help='Hours to look back')
