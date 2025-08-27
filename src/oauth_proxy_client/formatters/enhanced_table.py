@@ -624,6 +624,12 @@ class EnhancedTableFormatter:
             
             # Format the main line based on log type
             output.append(f"[{timestamp}] ", style="dim")
+            
+            # Always show component if available
+            component = log.get('component', '')
+            if component and component != 'unknown':
+                output.append(f"[{component}] ", style="magenta")
+            
             output.append(f"{status_marker} ", style=status_color)
             
             if is_http_request:
@@ -643,11 +649,9 @@ class EnhancedTableFormatter:
             else:
                 # System event format
                 level = log.get('level', 'INFO')
-                component = log.get('component', 'system')
                 message = log.get('message', '')
                 
                 output.append(f"[{level}] ", style=status_color)
-                output.append(f"[{component}] ", style="blue")
                 if message:
                     # Truncate very long messages unless in debug mode
                     if not is_debug and len(message) > 100:
@@ -664,11 +668,10 @@ class EnhancedTableFormatter:
                 client_id = log.get('client_id', log.get('trace_id', ''))  # Use trace_id as fallback
                 
                 if client_ip or proxy_hostname:
-                    # Show client_id in compact format
-                    if client_id:
-                        # Show last 8 chars for readability
-                        short_id = client_id[-8:] if len(client_id) > 8 else client_id
-                        output.append(f"  [{short_id}] ", style="dim cyan")
+                    # Show trace_id in full (not truncated)
+                    trace_id = log.get('trace_id', '')
+                    if trace_id:
+                        output.append(f"  [{trace_id}] ", style="dim cyan")
                     else:
                         output.append("  ", style="dim")
                     
@@ -678,19 +681,38 @@ class EnhancedTableFormatter:
                     else:
                         output.append(f"{client_ip or 'unknown'}", style="white")
                     output.append(" → Proxy: ", style="dim")
-                    output.append(f"{proxy_hostname or 'unknown'}\n", style="white")
-            
-            # Line 3: User and auth info (show for all types if present)
-            user_id = log.get('user_id', '')
-            auth_type = log.get('auth_type', '')
-            if (user_id and user_id != 'anonymous') or auth_type:
-                output.append("  User: ", style="dim")
-                output.append(f"{user_id or 'anonymous'}", style="cyan")
-                if auth_type:
-                    output.append(" | Auth: ", style="dim")
-                    output.append(f"{auth_type}\n", style="yellow")
-                else:
+                    output.append(f"{proxy_hostname or 'unknown'}", style="white")
+                    
+                    # Add backend URL if available
+                    backend_url = log.get('backend_url', '')
+                    if backend_url:
+                        output.append(" → Backend: ", style="dim")
+                        output.append(f"{backend_url}", style="green")
                     output.append("\n")
+            
+            # Line 3: Authentication info (enhanced to show all auth fields)
+            auth_user = log.get('auth_user', '')
+            auth_scopes = log.get('auth_scopes', '')
+            auth_email = log.get('auth_email', '')
+            auth_client_id = log.get('auth_client_id', '')
+            auth_type = log.get('auth_type', '')
+            
+            if auth_user or auth_scopes or auth_type:
+                output.append("  Auth: ", style="dim")
+                if auth_user:
+                    output.append(f"User={auth_user}", style="cyan")
+                    if auth_email:
+                        output.append(f" ({auth_email})", style="dim cyan")
+                if auth_scopes:
+                    output.append(" | Scopes=", style="dim")
+                    output.append(f"{auth_scopes}", style="yellow")
+                if auth_client_id:
+                    output.append(" | Client=", style="dim")
+                    output.append(f"{auth_client_id}", style="magenta")
+                if auth_type and not auth_user:  # Show auth_type only if no auth_user
+                    output.append(" | Type=", style="dim")
+                    output.append(f"{auth_type}", style="yellow")
+                output.append("\n")
             
             # Line 4: Query parameters (only show if not null/empty)
             query = log.get('request_query') or log.get('query', '')
@@ -758,23 +780,30 @@ class EnhancedTableFormatter:
                             body = str(body)[:500] + "... (truncated)"
                         output.append(f"    {body}\n", style="magenta")
                 
-                # Backend URL for proxy requests
-                backend_url = log.get('backend_url')
-                if backend_url:
-                    output.append("  [DEBUG] Backend: ", style="magenta")
-                    output.append(f"{backend_url}\n", style="magenta")
+                # Route and response metadata
+                route_id = log.get('route_id')
+                response_type = log.get('response_type')
+                if route_id or response_type:
+                    output.append("  [DEBUG] Route: ", style="magenta")
+                    if route_id:
+                        output.append(f"ID={route_id}", style="magenta")
+                    if response_type:
+                        output.append(f" Type={response_type}", style="magenta")
+                    output.append("\n")
                 
-                # Session ID
+                # Session IDs
                 session_id = log.get('session_id')
-                if session_id:
-                    output.append("  [DEBUG] Session: ", style="magenta")
-                    output.append(f"{session_id}\n", style="magenta")
-                
-                # Trace ID
-                trace_id = log.get('trace_id')
-                if trace_id:
-                    output.append("  [DEBUG] Trace: ", style="magenta")
-                    output.append(f"{trace_id}\n", style="magenta")
+                mcp_session_id = log.get('mcp_session_id')
+                worker_id = log.get('worker_id')
+                if session_id or mcp_session_id or worker_id:
+                    output.append("  [DEBUG] IDs: ", style="magenta")
+                    if session_id:
+                        output.append(f"Session={session_id}", style="magenta")
+                    if mcp_session_id:
+                        output.append(f" MCP={mcp_session_id}", style="magenta")
+                    if worker_id:
+                        output.append(f" Worker={worker_id}", style="magenta")
+                    output.append("\n")
                 
                 # Additional debug fields based on log type
                 if is_http_request:
