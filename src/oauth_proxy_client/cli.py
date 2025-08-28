@@ -28,6 +28,7 @@ from .commands.resources import resource_group
 from .commands.logs import log_group
 from .commands.system import system_group
 from .commands.workflows import workflow_group
+from .commands.reports import report_group
 
 # Console for error output
 console = Console(stderr=True)
@@ -243,6 +244,7 @@ cli.add_command(resource_group)
 cli.add_command(log_group)
 cli.add_command(system_group)
 cli.add_command(workflow_group)
+cli.add_command(report_group)
 
 
 def main():
