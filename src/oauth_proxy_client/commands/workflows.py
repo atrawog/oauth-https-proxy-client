@@ -457,7 +457,8 @@ def oauth_setup(ctx, domain, generate_key, github_client_id, github_client_secre
             console.print(f"     GITHUB_CLIENT_SECRET=your_client_secret")
         
         console.print("\n[yellow]2. Configure allowed users in .env:[/yellow]")
-        console.print("   OAUTH_ALLOWED_GITHUB_USERS=user1,user2  # or * for all")
+        console.print("   OAUTH_ADMIN_USERS=user1,user2  # Admin users (no wildcards)")
+        console.print("   OAUTH_USER_USERS=user3,user4  # Read-only users")
         
         console.print(f"\n[dim]OAuth server available at: https://{auth_hostname}[/dim]")
         console.print(f"[dim]Server metadata: https://{auth_hostname}/.well-known/oauth-authorization-server[/dim]")

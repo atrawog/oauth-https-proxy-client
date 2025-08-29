@@ -59,7 +59,9 @@ class Config:
     github_client_id: Optional[str] = field(default_factory=lambda: os.getenv('GITHUB_CLIENT_ID'))
     github_client_secret: Optional[str] = field(default_factory=lambda: os.getenv('GITHUB_CLIENT_SECRET'))
     base_domain: str = field(default_factory=lambda: os.getenv('BASE_DOMAIN', 'localhost'))
-    oauth_allowed_github_users: str = field(default_factory=lambda: os.getenv('OAUTH_ALLOWED_GITHUB_USERS', '*'))
+    # Security: Explicit user lists only (no wildcards)
+    oauth_admin_users: str = field(default_factory=lambda: os.getenv('OAUTH_ADMIN_USERS', ''))
+    oauth_user_users: str = field(default_factory=lambda: os.getenv('OAUTH_USER_USERS', ''))
     
     # OAuth Protocol
     oauth_redirect_uri: str = field(default_factory=lambda: os.getenv('OAUTH_REDIRECT_URI', 'urn:ietf:wg:oauth:2.0:oob'))
