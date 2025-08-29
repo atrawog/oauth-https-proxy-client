@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Optional, Dict, Any
 import httpx
 from datetime import datetime, timedelta
+from typing import List
 
 from .exceptions import AuthenticationError
 from .logging import get_logger
@@ -305,8 +306,12 @@ class DeviceFlowAuth:
         else:
             self.base_url = f"https://{domain}"
     
+    
     def authenticate(self, open_browser: bool = True) -> Optional[Dict[str, Any]]:
-        """Perform device flow authentication.
+        """OAuth 2.0 Device Flow with CLIENT-DRIVEN resource discovery.
+        
+        RFC 8628 (Device Flow) + RFC 8707 (Resource Indicators) compliant.
+        The CLIENT determines what resources to request.
         
         Args:
             open_browser: Whether to automatically open browser
@@ -315,24 +320,15 @@ class DeviceFlowAuth:
             Dictionary with tokens if successful, None otherwise
         """
         try:
-            # Step 1: Get device code
+            # Step 1: CLIENT determines required resources
+            resources = self._determine_required_resources()
+            
+            # Step 2: Request device code with explicit resources
             print(f"Requesting device code from {self.base_url}/device/code...")
+            device_data = self._request_device_code(resources)
             
-            # Build resource URI for MCP compliance
-            resource_uri = f"http://{self.domain}" if self.domain == "localhost" else f"https://{self.domain}"
-            
-            with httpx.Client() as client:
-                # Pass resource parameter for MCP-compliant device flow
-                response = client.post(
-                    f"{self.base_url}/device/code",
-                    data={
-                        "client_id": "device_flow_client",
-                        "scope": "read:user user:email",
-                        "resource": resource_uri
-                    }
-                )
-                response.raise_for_status()
-                device_data = response.json()
+            if not device_data:
+                return None
             
             device_code = device_data.get("device_code")
             user_code = device_data.get("user_code")
@@ -421,6 +417,122 @@ class DeviceFlowAuth:
         except Exception as e:
             print(f"Error during authentication: {e}")
             return None
+    
+    def _determine_required_resources(self) -> List[str]:
+        """CLIENT business logic to determine required resources.
+        
+        This is APPLICATION logic, not OAuth protocol.
+        The client decides based on its capabilities and needs.
+        """
+        existing_token = os.getenv('OAUTH_ACCESS_TOKEN', '').strip()
+        
+        # If no token or expired, bootstrap with localhost
+        if not existing_token or self._is_token_expired(existing_token):
+            print("Bootstrap: Requesting access to localhost only")
+            return ["http://localhost"]
+        
+        # Have token, try to discover all available proxies
+        print("Discovering available auth-enabled proxies...")
+        try:
+            proxies = self._discover_available_proxies(existing_token)
+            resources = self._build_resource_list(proxies)
+            print(f"Requesting access to {len(resources)} resources:")
+            for r in resources:
+                print(f"  - {r}")
+            return resources
+        except Exception as e:
+            print(f"Discovery failed ({e}), requesting localhost only")
+            return ["http://localhost"]
+    
+    def _discover_available_proxies(self, token: str) -> List[Dict[str, Any]]:
+        """Use API to discover available proxies.
+        
+        This is APPLICATION-SPECIFIC logic, not OAuth.
+        """
+        with httpx.Client(timeout=10.0) as client:
+            response = client.get(
+                f"{self.base_url}/proxy/targets/",
+                headers={"Authorization": f"Bearer {token}"},
+                params={"auth_enabled": "true"}
+            )
+            
+            if response.status_code == 401:
+                # Token invalid/expired
+                raise Exception("Token invalid or expired")
+            
+            response.raise_for_status()
+            return response.json()
+    
+    def _build_resource_list(self, proxies: List[Dict[str, Any]]) -> List[str]:
+        """Convert proxy list to OAuth resource URIs.
+        
+        OAuth resources are URIs that identify protected resources.
+        """
+        resources = []
+        
+        for proxy in proxies:
+            if not proxy.get("auth_enabled"):
+                continue
+                
+            hostname = proxy.get("proxy_hostname")
+            if not hostname:
+                continue
+                
+            # Build proper resource URI
+            if hostname == "localhost":
+                resources.append("http://localhost")
+            else:
+                resources.append(f"https://{hostname}")
+        
+        # Ensure localhost is first (if present) for consistency
+        if "http://localhost" in resources:
+            resources.remove("http://localhost")
+            resources.insert(0, "http://localhost")
+        
+        return resources if resources else ["http://localhost"]
+    
+    def _request_device_code(self, resources: List[str]) -> Optional[Dict[str, Any]]:
+        """Request device code with explicit resources per RFC 8707.
+        
+        RFC 8707 Section 2: Resource parameter(s) in authorization request.
+        Multiple resources sent as repeated form parameters.
+        """
+        with httpx.Client(timeout=30.0) as client:
+            # Build form data with repeated resource parameters
+            # httpx expects data as dict for form encoding, with list values for repeated params
+            form_data = {
+                "client_id": "device_flow_client",
+                "scope": "read:user user:email",
+            }
+            
+            # Add resources as a list - httpx will handle repeated parameters
+            if resources:
+                form_data["resource"] = resources
+            
+            response = client.post(
+                f"{self.base_url}/device/code",
+                data=form_data
+            )
+            
+            if response.status_code != 200:
+                print(f"Failed to get device code: {response.status_code}")
+                print(response.text)
+                return None
+            
+            return response.json()
+    
+    def _is_token_expired(self, token: str) -> bool:
+        """Check if JWT token is expired."""
+        try:
+            import jwt
+            # Decode without verification to check expiry
+            payload = jwt.decode(token, options={"verify_signature": False})
+            exp = payload.get("exp", 0)
+            # Add 60 second buffer for clock skew
+            return time.time() >= (exp - 60)
+        except Exception:
+            # Treat any decode error as expired
+            return True
     
     def save_tokens_to_env(self, access_token: str, refresh_token: str, 
                            expires_at: float = None, scope: str = None):

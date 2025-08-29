@@ -44,14 +44,19 @@ def display_token_info(access_token, refresh_token=None, scope=None, title="OAut
         # Add scope
         table.add_row("Scope", scope or claims.get('scope', 'N/A'))
         
-        # Add audience
+        # Add audience(s)
         if 'aud' in claims:
             aud = claims['aud']
             if isinstance(aud, list):
-                aud_str = ', '.join(aud)
+                if len(aud) == 1:
+                    table.add_row("Audience (aud)", aud[0])
+                else:
+                    # Show count and list each audience
+                    table.add_row("Audiences", f"[cyan]{len(aud)} proxies[/cyan]")
+                    for i, audience in enumerate(aud, 1):
+                        table.add_row(f"  {i}.", audience)
             else:
-                aud_str = str(aud)
-            table.add_row("Audience (aud)", aud_str)
+                table.add_row("Audience (aud)", str(aud))
         
         # Add issuer
         if 'iss' in claims:
